@@ -1,5 +1,5 @@
 import asyncio
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
 from aiohttp import ClientSession
@@ -65,6 +65,49 @@ async def test_db_failure_closes_http_session(monkeypatch):
         await application.run(Settings(bot_token="unused", postgres_password="unused"))
     # Assert
     bot.session.close.assert_awaited_once()
+
+
+async def test_successful_shutdown_waits_for_update_handler(monkeypatch):
+    from app import __main__ as application
+
+    pool = Mock(close=AsyncMock())
+    bot = Mock(
+        get_me=AsyncMock(return_value=Mock(username="test_bot")),
+        get_webhook_info=AsyncMock(return_value=Mock(url="")),
+        session=Mock(close=AsyncMock()),
+    )
+    runner = Mock(cleanup=AsyncMock())
+    store = Mock(initialize=AsyncMock())
+    llm = MagicMock()
+    llm.__aenter__ = AsyncMock(return_value=llm)
+    llm.__aexit__ = AsyncMock()
+
+    class FakeDispatcher:
+        def include_router(self, _router):
+            pass
+
+        def resolve_used_update_types(self):
+            return ["message"]
+
+        async def start_polling(self, _bot, *, handle_as_tasks, **_kwargs):
+            assert handle_as_tasks is False
+            await asyncio.sleep(0)
+
+    monkeypatch.setattr(application, "create_pool", AsyncMock(return_value=pool))
+    monkeypatch.setattr(application, "create_bot", Mock(return_value=bot))
+    monkeypatch.setattr(application, "PostgresStore", Mock(return_value=store))
+    monkeypatch.setattr(application, "OpenRouterChatClient", Mock(return_value=llm))
+    monkeypatch.setattr(application, "Dispatcher", FakeDispatcher)
+    monkeypatch.setattr(application, "create_router", Mock(return_value=Mock()))
+    monkeypatch.setattr(application, "start_health_server", AsyncMock(return_value=runner))
+
+    await application.run(Settings(bot_token="unused", postgres_password="unused"))
+
+    store.initialize.assert_awaited_once()
+    runner.cleanup.assert_awaited_once()
+    llm.__aexit__.assert_awaited_once()
+    bot.session.close.assert_awaited_once()
+    pool.close.assert_awaited_once()
 
 
 async def test_http_proxy_receives_connect_and_failure_has_no_direct_fallback(unused_tcp_port):

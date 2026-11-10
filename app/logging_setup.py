@@ -32,6 +32,7 @@ def configure_logging(settings: Settings) -> None:
             [
                 settings.bot_token,
                 settings.postgres_password,
+                settings.openrouter_api_key,
                 settings.telegram_proxy_url,
                 proxy.password or "",
                 unquote(proxy.password or ""),

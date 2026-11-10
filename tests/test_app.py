@@ -1,90 +1,133 @@
 import asyncio
 import logging
-from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from aiogram import Bot, Dispatcher
-from aiogram.methods import SendMessage
-from aiogram.types import Chat, Message, PhotoSize, Update, User
 
-from app.config import ConfigError, Settings
-from app.handlers.echo import router
+from app.config import DEFAULT_OPENROUTER_MODELS, ConfigError, Settings
 from app.health import HealthState, health_result
 from app.logging_setup import SecretFilter
 from app.telegram import create_bot
 
 TOKEN = "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijk"
+PRIMARY = "google/gemma-4-26b-a4b-it:free"
+RESERVE = "nvidia/nemotron-3.5-lightning:free"
 
 
 @pytest.fixture
 def settings(tmp_path):
     path = tmp_path / ".env"
-    path.write_text(f"BOT_TOKEN={TOKEN}\nPOSTGRES_PASSWORD=secret-db\n", encoding="utf-8")
+    path.write_text(
+        f"BOT_TOKEN={TOKEN}\nPOSTGRES_PASSWORD=secret-db\n"
+        f"OPENROUTER_API_KEY=fake-key\nOPENROUTER_MODELS={PRIMARY},{RESERVE}\n",
+        encoding="utf-8",
+    )
     return Settings.load(path, environ={})
-
-
-@pytest.mark.parametrize("text", ["Привет 👋", "/start", "<b>текст</b> & *слово*", "строка\nдва"])
-async def test_echo_preserves_exact_text(text):
-    # Arrange
-    bot = Bot(TOKEN)
-    bot.session = AsyncMock()
-    dispatcher = Dispatcher()
-    # A Router can have only one parent; use its handler callback through a fresh router.
-    from aiogram import Router
-
-    from app.handlers.echo import echo_text
-
-    test_router = Router()
-    from aiogram import F
-
-    test_router.message.register(echo_text, F.text)
-    dispatcher.include_router(test_router)
-    message = Message(
-        message_id=1,
-        date=datetime.now(UTC),
-        chat=Chat(id=42, type="private"),
-        from_user=User(id=42, is_bot=False, first_name="Студент"),
-        text=text,
-    )
-    # Act
-    await dispatcher.feed_update(bot, Update(update_id=1, message=message))
-    # Assert
-    method = bot.session.call_args.args[1]
-    assert isinstance(method, SendMessage)
-    assert method.chat_id == 42
-    assert method.text == text
-    assert method.parse_mode is None
-
-
-async def test_photo_does_not_match_text_handler():
-    # Arrange
-    handler = router.message.handlers[0]
-    message = Message(
-        message_id=1,
-        date=datetime.now(UTC),
-        chat=Chat(id=42, type="private"),
-        photo=[PhotoSize(file_id="a", file_unique_id="b", width=1, height=1)],
-    )
-    # Act
-    matches, _ = await handler.check(message)
-    # Assert
-    assert matches is False
 
 
 def test_settings_environment_overrides_file(tmp_path):
     # Arrange
     path = tmp_path / ".env"
     path.write_text(
-        f"BOT_TOKEN={TOKEN}\nPOSTGRES_PASSWORD='p$a#ss'\nPOSTGRES_PORT=5432\n", encoding="utf-8"
+        f"BOT_TOKEN={TOKEN}\nPOSTGRES_PASSWORD='p$a#ss'\nPOSTGRES_PORT=5432\n"
+        f"OPENROUTER_API_KEY=fake-key\nOPENROUTER_MODELS={PRIMARY},{RESERVE}\n",
+        encoding="utf-8",
     )
     # Act
-    config = Settings.load(path, environ={"POSTGRES_PORT": "55432"})
+    config = Settings.load(
+        path,
+        environ={"POSTGRES_PORT": "55432", "OPENROUTER_MODELS": f"{RESERVE},{PRIMARY}"},
+    )
     # Assert
     assert config.postgres_port == 55432
     assert config.postgres_password == "p$a#ss"
+    assert config.openrouter_models == (RESERVE, PRIMARY)
+    assert config.openrouter_api_base_url == "https://openrouter.ai/api/v1"
     assert "p$a#ss" not in repr(config)
     assert TOKEN not in repr(config)
+    assert "fake-key" not in repr(config)
+
+
+def test_missing_openrouter_key_is_reported_without_using_legacy_values(tmp_path):
+    values = {
+        "BOT_TOKEN": TOKEN,
+        "POSTGRES_PASSWORD": "db-secret",
+        "LLM_API_KEY": "fake-key",
+        "LLM_API_BASE_URL": "https://legacy.example/v1",
+        "LLM_MODEL": "legacy-paid-model",
+    }
+
+    with pytest.raises(ConfigError, match="OPENROUTER_API_KEY") as exc:
+        Settings.load(tmp_path / ".env", environ=values)
+
+    assert "fake-key" not in str(exc.value)
+    assert "db-secret" not in str(exc.value)
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://openrouter.ai/api/v1",
+        "https://user:secret@openrouter.ai/api/v1",
+        "https://openrouter.ai.evil.example/api/v1",
+        "https://openrouter.ai/api/v1?key=secret",
+        "https://openrouter.ai/api/v2",
+    ],
+)
+def test_openrouter_url_rejects_insecure_or_other_hosts(tmp_path, url):
+    with pytest.raises(ConfigError, match="OPENROUTER_API_BASE_URL") as exc:
+        Settings.load(
+            tmp_path / ".env",
+            environ={
+                "BOT_TOKEN": TOKEN,
+                "POSTGRES_PASSWORD": "db-secret",
+                "OPENROUTER_API_BASE_URL": url,
+                "OPENROUTER_API_KEY": "fake-key",
+            },
+        )
+    assert "secret" not in str(exc.value)
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "",
+        f"{PRIMARY},{PRIMARY}",
+        "openrouter/free",
+        "openrouter/auto",
+        "openrouter/free:free",
+        "openrouter/auto:free",
+        "paid/model",
+        "paid/model:free,paid/model",
+        "/missing-author:free",
+        "author/slug:free?paid=1",
+    ],
+)
+def test_openrouter_model_list_rejects_empty_duplicates_and_nonfree_ids(tmp_path, raw):
+    with pytest.raises(ConfigError, match="OPENROUTER_MODELS"):
+        Settings.load(
+            tmp_path / ".env",
+            environ={
+                "BOT_TOKEN": TOKEN,
+                "POSTGRES_PASSWORD": "db-secret",
+                "OPENROUTER_API_KEY": "fake-key",
+                "OPENROUTER_MODELS": raw,
+            },
+        )
+
+
+def test_openrouter_default_pool_keeps_catalog_priority(tmp_path):
+    settings = Settings.load(
+        tmp_path / ".env",
+        environ={
+            "BOT_TOKEN": TOKEN,
+            "POSTGRES_PASSWORD": "db-secret",
+            "OPENROUTER_API_KEY": "fake-key",
+        },
+    )
+
+    assert settings.openrouter_models == DEFAULT_OPENROUTER_MODELS
+    assert settings.openrouter_models[0] == PRIMARY
 
 
 @pytest.mark.parametrize("value", ["abc", "0", "65536"])
@@ -96,6 +139,7 @@ def test_invalid_port_has_safe_error(tmp_path, value):
         Settings.load(
             path,
             environ={"BOT_TOKEN": TOKEN, "POSTGRES_PASSWORD": "secret", "POSTGRES_PORT": value},
+            require_llm=False,
         )
 
 

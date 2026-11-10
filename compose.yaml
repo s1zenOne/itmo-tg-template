@@ -27,6 +27,12 @@ services:
     environment:
       BOT_TOKEN: ${BOT_TOKEN:?Задайте BOT_TOKEN}
       TELEGRAM_PROXY_URL: ${TELEGRAM_PROXY_URL:-}
+      OPENROUTER_API_BASE_URL: ${OPENROUTER_API_BASE_URL:-https://openrouter.ai/api/v1}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_MODELS: ${OPENROUTER_MODELS:-google/gemma-4-26b-a4b-it:free,nvidia/nemotron-3.5-lightning:free,dots-studio/dots-3-note-preview:free}
+      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-30}
+      HISTORY_MAX_MESSAGES: ${HISTORY_MAX_MESSAGES:-12}
+      CONTEXT_MAX_CHARS: ${CONTEXT_MAX_CHARS:-12000}
       POSTGRES_HOST: db
       POSTGRES_PORT: "5432"
       POSTGRES_DB: ${POSTGRES_DB:-bot}

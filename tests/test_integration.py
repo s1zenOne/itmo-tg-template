@@ -17,6 +17,7 @@ import pytest
 from app.config import Settings
 from app.db import create_pool
 from app.health import HealthState, health_result
+from app.store import HistoryMessage, PostgresStore
 from scripts.common import CommandError, run_command
 
 pytestmark = [
@@ -101,6 +102,13 @@ async def test_real_db_password_restart_health_and_persistence(database):
     try:
         await pool.execute("CREATE TABLE integration_probe (value text NOT NULL)")
         await pool.execute("INSERT INTO integration_probe VALUES ($1)", "Сохранилось 👋")
+        store = PostgresStore(pool)
+        await store.initialize()
+        second, _ = await store.get_context(202, 12)
+        first = await store.set_mode(101, "quiz")
+        first = await store.set_temperature(101, 0.7)
+        assert await store.save_result(101, first.generation, "Тема: словари", "Вопрос: ключи?")
+        assert await store.save_result(202, second.generation, "Другой вопрос", "Другой ответ")
         # Act / Assert: реальное подключение и ошибка пароля.
         assert (await health_result(state))[0] == 200
         with pytest.raises(asyncpg.InvalidPasswordError):
@@ -116,6 +124,26 @@ async def test_real_db_password_restart_health_and_persistence(database):
             await asyncio.sleep(1)
         assert (await health_result(state))[0] == 200
         assert await pool.fetchval("SELECT value FROM integration_probe") == "Сохранилось 👋"
+        await pool.close()
+        pool = await create_pool(settings)
+        reopened = PostgresStore(pool)
+        await reopened.initialize()
+        first_after, first_history = await reopened.get_context(101, 12)
+        second_after, second_history = await reopened.get_context(202, 12)
+        assert (first_after.mode, first_after.temperature) == ("quiz", 0.7)
+        assert first_history == [
+            HistoryMessage("user", "Тема: словари"),
+            HistoryMessage("assistant", "Вопрос: ключи?"),
+        ]
+        assert second_after.mode == "study"
+        assert second_history == [
+            HistoryMessage("user", "Другой вопрос"),
+            HistoryMessage("assistant", "Другой ответ"),
+        ]
+        await reopened.reset_history(101)
+        assert not await reopened.save_result(101, first.generation, "Старое", "Ответ")
+        assert (await reopened.get_context(101, 12))[1] == []
+        assert (await reopened.get_context(202, 12))[1] == second_history
     finally:
         task.cancel()
         await asyncio.gather(task, return_exceptions=True)

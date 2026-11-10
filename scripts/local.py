@@ -11,7 +11,7 @@ from pathlib import Path
 
 from dotenv import dotenv_values, set_key
 
-from app.config import ConfigError, Settings
+from app.config import DEFAULT_OPENROUTER_MODELS, OPENROUTER_API_BASE_URL, ConfigError, Settings
 from app.db import create_pool
 from scripts.common import CommandError, private_write, run_command
 
@@ -35,10 +35,18 @@ def prepare_env(
         "POSTGRES_USER": "bot",
         "LOG_LEVEL": "INFO",
         "HEALTH_PORT": "8080",
+        "OPENROUTER_API_BASE_URL": OPENROUTER_API_BASE_URL,
+        "OPENROUTER_MODELS": ",".join(DEFAULT_OPENROUTER_MODELS),
     }
     for key, default in defaults.items():
-        if not values.get(key):
+        if key in {"OPENROUTER_API_BASE_URL", "OPENROUTER_MODELS"}:
+            missing = key not in values
+        else:
+            missing = not values.get(key)
+        if missing:
             updates[key] = default
+    if "OPENROUTER_API_KEY" not in values:
+        updates["OPENROUTER_API_KEY"] = ""
     if not values.get("BOT_TOKEN"):
         updates["BOT_TOKEN"] = ask("Токен бота из BotFather (ввод скрыт): ").strip()
     if not values.get("POSTGRES_PASSWORD"):
@@ -50,7 +58,7 @@ def prepare_env(
     merged = {**values, **updates}
     if cloud and not merged.get("TELEGRAM_PROXY_URL"):
         raise ConfigError("Для облака необходимо указать внешний прокси Telegram.")
-    Settings.load(path, environ=merged)
+    Settings.load(path, environ=merged, require_llm=False)
     if not path.exists():
         private_write(path, "# Секретные настройки. Не добавляйте этот файл в Git.\n")
     for key, value in updates.items():
@@ -90,7 +98,7 @@ def local_main(root: Path, action: str, setup_only: bool) -> int:
     run_command(["docker", "compose", "version"], label="Проверка Docker Compose")
     if action == "up":
         path = prepare_env(root, cloud=False)
-        settings = Settings.load(path)
+        settings = Settings.load(path, require_llm=not setup_only)
         if settings.postgres_host not in {"127.0.0.1", "localhost"}:
             raise ConfigError("Для локального запуска POSTGRES_HOST должен быть 127.0.0.1.")
         print("Запускаем PostgreSQL и ждём готовности…", flush=True)
@@ -102,7 +110,10 @@ def local_main(root: Path, action: str, setup_only: bool) -> int:
             # Один раз разбираем настройки Python-парсером; Compose получает те же значения.
             env={
                 **os.environ,
-                **{key.upper(): str(value) for key, value in asdict(settings).items()},
+                **{
+                    key.upper(): ",".join(value) if isinstance(value, tuple) else str(value)
+                    for key, value in asdict(settings).items()
+                },
             },
         )
         try:
