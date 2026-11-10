@@ -5,6 +5,7 @@
 - Корень проекта — `itmo-tg-template`. Работай из него. Перед правками прочитай `README.md`, нужный раздел `docs/labs-guide.md` и проверь `git status`.
 - Проект использует Python 3.12, aiogram 3 и PostgreSQL через пул asyncpg. Точка входа — `app/__main__.py`, настройки — `app/config.py`, маскирование секретов — `app/logging_setup.py`. Сохраняй локальный запуск, healthcheck и корректное завершение.
 - Для лабораторной № 1 используй [раздел методички](docs/labs-guide.md#lab1), [промпт реализации](docs/lab1-prompt.md) и [шаблон отчёта](docs/labs-guide.md#appendix-report). Общие правила работы с ИИ и данными описаны [в методичке](docs/labs-guide.md#ai-use).
+- Для перехода бота на OpenRouter используй [промпт № 2](docs/lab1-openrouter-prompt.md). Заполняй пул актуальными текстовыми моделями `:free` с нулевой ценой и поддержкой `temperature`. Для эксперимента закрепляй одну модель и один эндпоинт без переключения.
 - Для подготовки локального окружения используй `bash scripts/start.sh --setup-only` на macOS/Linux или команду из README для Windows. Не запускай второй polling-процесс с тем же токеном.
 
 ## Git
