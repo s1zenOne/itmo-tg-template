@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import math
+import re
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -52,12 +53,30 @@ class LLMRequestError(LLMError):
 
 
 @dataclass(frozen=True)
+class NativeToolCall:
+    id: str
+    name: str
+    arguments: str
+
+    def as_message(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "type": "function",
+            "function": {"name": self.name, "arguments": self.arguments},
+        }
+
+
+@dataclass(frozen=True)
 class LLMResult:
     text: str
     model: str
     provider: str | None
     usage: dict[str, int] | None
     request_id: str
+    tool_calls: tuple[NativeToolCall, ...] = ()
+    version: str | None = None
+    endpoint: str | None = None
+    cost: float | None = None
 
 
 @dataclass(frozen=True)
@@ -140,24 +159,45 @@ def _no_providers_available(data: object, model: str) -> bool:
     )
 
 
-def _provider(data: dict[str, Any]) -> str | None:
+def _selected_endpoint(data: dict[str, Any]) -> dict[str, Any]:
     metadata = data.get("openrouter_metadata")
-    if not isinstance(metadata, dict):
-        return None
-    endpoints = metadata.get("endpoints")
-    if not isinstance(endpoints, dict) or not isinstance(endpoints.get("available"), list):
-        return None
-    for endpoint in endpoints["available"]:
-        if (
-            isinstance(endpoint, dict)
-            and endpoint.get("selected") is True
-            and isinstance(endpoint.get("provider"), str)
-        ):
-            return endpoint["provider"]
+    if isinstance(metadata, dict):
+        endpoints = metadata.get("endpoints")
+        if isinstance(endpoints, dict) and isinstance(endpoints.get("available"), list):
+            for endpoint in endpoints["available"]:
+                if isinstance(endpoint, dict) and endpoint.get("selected") is True:
+                    return endpoint
+    return {}
+
+
+def _label(value: object) -> str | None:
+    if isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9 /._:+()'-]{0,159}", value):
+        return value
     return None
 
 
-def _parse_result(data: object, request_id: str) -> LLMResult:
+def _parse_call(raw: object) -> NativeToolCall:
+    if not isinstance(raw, dict) or raw.get("type") != "function":
+        raise LLMInvalidResponse
+    call_id, function = raw.get("id"), raw.get("function")
+    if (
+        not isinstance(call_id, str)
+        or not re.fullmatch(r"[A-Za-z0-9_:-]{1,128}", call_id)
+        or not isinstance(function, dict)
+    ):
+        raise LLMInvalidResponse
+    name, arguments = function.get("name"), function.get("arguments")
+    if (
+        not isinstance(name, str)
+        or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", name)
+        or not isinstance(arguments, str)
+        or len(arguments) > 4096
+    ):
+        raise LLMInvalidResponse
+    return NativeToolCall(call_id, name, arguments)
+
+
+def _parse_result(data: object, request_id: str, *, with_tools: bool = False) -> LLMResult:
     if not isinstance(data, dict):
         raise LLMInvalidResponse
     choices = data.get("choices")
@@ -165,17 +205,28 @@ def _parse_result(data: object, request_id: str) -> LLMResult:
         raise LLMInvalidResponse
     choice = choices[0]
     message = choice.get("message")
-    if not isinstance(message, dict) or not isinstance(message.get("content"), str):
+    model = _label(data.get("model"))
+    if not isinstance(message, dict) or not model:
         raise LLMInvalidResponse
-    content = message["content"]
-    model = data.get("model")
-    if (
-        not content.strip()
-        or choice.get("finish_reason") not in (None, "stop")
-        or not isinstance(model, str)
-        or not model
-    ):
+    content = message.get("content")
+    raw_calls = message.get("tool_calls")
+    finish = choice.get("finish_reason")
+    if raw_calls is not None and not isinstance(raw_calls, list):
         raise LLMInvalidResponse
+    if raw_calls:
+        if (
+            not with_tools
+            or finish != "tool_calls"
+            or len(raw_calls) > 32
+            or content is not None
+            and not isinstance(content, str)
+        ):
+            raise LLMInvalidResponse
+        calls = tuple(_parse_call(raw_call) for raw_call in raw_calls)
+    else:
+        if not isinstance(content, str) or not content.strip() or finish not in (None, "stop"):
+            raise LLMInvalidResponse
+        calls = ()
     usage_data = data.get("usage")
     usage = None
     if isinstance(usage_data, dict):
@@ -186,7 +237,24 @@ def _parse_result(data: object, request_id: str) -> LLMResult:
             and not isinstance(usage_data[key], bool)
             and usage_data[key] >= 0
         }
-    return LLMResult(content, model, _provider(data), usage, request_id)
+    raw_cost = usage_data.get("cost") if isinstance(usage_data, dict) else None
+    cost = (
+        float(raw_cost)
+        if type(raw_cost) in {int, float} and math.isfinite(raw_cost) and raw_cost >= 0
+        else None
+    )
+    selected = _selected_endpoint(data)
+    return LLMResult(
+        content or "",
+        model,
+        _label(selected.get("provider")) or _label(data.get("provider")),
+        usage,
+        request_id,
+        calls,
+        _label(selected.get("model")),
+        _label(selected.get("provider_slug")),
+        cost,
+    )
 
 
 def _classify_error(status: int, data: object, headers: Any, model: str) -> None:
@@ -243,12 +311,13 @@ class OpenRouterChatClient:
 
     async def generate(
         self,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         temperature: float,
         request_id: str,
         *,
         model: str | None = None,
         endpoint: str | None = None,
+        tools: list[dict[str, Any]] | None = None,
     ) -> LLMResult:
         if self._session is None:
             raise RuntimeError("LLM-клиент не открыт.")
@@ -272,6 +341,14 @@ class OpenRouterChatClient:
                         if endpoint is not None:
                             provider["order"] = [endpoint]
                             provider["only"] = [endpoint]
+                        payload = {
+                            "model": candidate,
+                            "messages": messages,
+                            "temperature": temperature,
+                            "provider": provider,
+                        }
+                        if tools:
+                            payload.update(tools=tools, tool_choice="auto")
                         async with self._session.post(
                             f"{OPENROUTER_API_BASE_URL}/chat/completions",
                             headers={
@@ -279,12 +356,7 @@ class OpenRouterChatClient:
                                 "Content-Type": "application/json",
                                 "X-OpenRouter-Metadata": "enabled",
                             },
-                            json={
-                                "model": candidate,
-                                "messages": messages,
-                                "temperature": temperature,
-                                "provider": provider,
-                            },
+                            json=payload,
                             allow_redirects=False,
                         ) as response:
                             status = response.status
@@ -299,7 +371,7 @@ class OpenRouterChatClient:
                             or (isinstance(data, dict) and "error" in data)
                         ):
                             _classify_error(status, data, headers, candidate)
-                        result = _parse_result(data, request_id)
+                        result = _parse_result(data, request_id, with_tools=bool(tools))
                         outcome = "ok"
                         logger.info(
                             "Ответ модели: id=%s model=%s provider=%s tokens=%s",

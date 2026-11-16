@@ -416,3 +416,55 @@ async def test_parallel_results_keep_their_own_metadata(monkeypatch):
         ROUTE,
         "req-second",
     )
+
+
+async def test_native_tool_call_and_pinned_revision_are_parsed(monkeypatch):
+    raw = completion(model=RESERVE, provider="Nvidia")
+    raw["choices"] = [
+        {
+            "message": {
+                "content": None,
+                "reasoning": "private chain",
+                "tool_calls": [
+                    {
+                        "id": "test-tool",
+                        "type": "function",
+                        "function": {"name": "get_weather", "arguments": '{"city":"Казань"}'},
+                    }
+                ],
+            },
+            "finish_reason": "tool_calls",
+        }
+    ]
+    raw["usage"]["cost"] = 0
+    raw["openrouter_metadata"]["endpoints"]["available"][1].update(
+        model="nvidia/nemotron-3.5-lightning-20260807:free", provider_slug=ROUTE
+    )
+    session = fake_session(monkeypatch, FakeResponse(200, raw))
+    tools = [{"type": "function", "function": {"name": "get_weather"}}]
+    async with OpenRouterChatClient(settings()) as client:
+        result = await client.generate(
+            DIALOGUE, 0.3, "req-tool", model=RESERVE, endpoint=ROUTE, tools=tools
+        )
+    assert result.text == ""
+    assert result.version == "nvidia/nemotron-3.5-lightning-20260807:free"
+    assert result.endpoint == ROUTE
+    assert result.cost == 0.0
+    assert result.tool_calls[0].as_message() == raw["choices"][0]["message"]["tool_calls"][0]
+    payload = assert_free_request(session.calls[0], (RESERVE,))
+    assert payload["tool_choice"] == "auto"
+    assert payload["tools"] == tools
+    assert "private chain" not in repr(result)
+
+
+async def test_tool_response_is_rejected_for_plain_chat(monkeypatch):
+    raw = completion()
+    raw["choices"][0]["message"]["tool_calls"] = [
+        {"id": "call", "type": "function", "function": {"name": "get_weather", "arguments": "{}"}}
+    ]
+    raw["choices"][0]["finish_reason"] = "tool_calls"
+    fake_session(monkeypatch, FakeResponse(200, raw))
+    async with OpenRouterChatClient(settings()) as client:
+        with pytest.raises(LLMError) as raised:
+            await client.generate(DIALOGUE, 0.3, "req-unexpected-tool")
+    assert raised.value.code == "invalid_response"
