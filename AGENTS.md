@@ -7,6 +7,7 @@
 - Для лабораторной № 1 используй [раздел методички](docs/labs-guide.md#lab1), [промпт реализации](docs/lab1-prompt.md) и [шаблон отчёта](docs/labs-guide.md#appendix-report). Общие правила работы с ИИ и данными описаны [в методичке](docs/labs-guide.md#ai-use).
 - Для перехода бота на OpenRouter используй [промпт № 2](docs/lab1-openrouter-prompt.md). Заполняй пул актуальными текстовыми моделями `:free` с нулевой ценой и поддержкой `temperature`. Для эксперимента закрепляй одну модель и один эндпоинт без переключения.
 - Для локального запуска на macOS используй [промпт № 3](docs/lab1-launch-prompt.md). Отдельно проверяй healthcheck и ответ модели в Telegram.
+- Для лабораторной № 2 используй [промпт реализации](docs/lab2-prompt.md), [раздел методички](docs/labs-guide.md#lab2) и [базовый набор запросов](docs/evaluation/lab2-routing.json).
 - Для подготовки локального окружения используй `bash scripts/start.sh --setup-only` на macOS/Linux или команду из README для Windows. Не запускай второй polling-процесс с тем же токеном.
 
 ## Git
