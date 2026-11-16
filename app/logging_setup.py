@@ -19,6 +19,10 @@ class SecretFilter(logging.Filter):
         for secret in self.secrets:
             text = text.replace(secret, "[скрыто]")
         text = re.sub(r"(https?://|socks5://)[^\s/@]+:[^\s/@]+@", r"\1[скрыто]@", text)
+        if record.name.startswith("aiogram"):
+            text = re.sub(r"(?i)(\b(?:update|bot|user|chat) id[= :]+)\d+", r"\1[скрыто]", text)
+            if text.startswith(("Run polling for bot ", "Polling stopped for bot ")):
+                text = text.split(" for bot ", 1)[0]
         record.msg, record.args = text, ()
         record.exc_info = record.exc_text = record.stack_info = None
         return True
@@ -41,3 +45,5 @@ def configure_logging(settings: Settings) -> None:
     )
     handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
     logging.basicConfig(level=settings.log_level, handlers=[handler], force=True)
+    # Aiogram event records contain the Telegram update ID.
+    logging.getLogger("aiogram.event").disabled = True

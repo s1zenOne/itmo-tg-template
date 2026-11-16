@@ -4,12 +4,15 @@ import logging
 
 from aiogram import Dispatcher
 
+from app.agent import AgentService
+from app.agent_router import AgentRouter
 from app.config import ConfigError, Settings
 from app.db import create_pool
 from app.handlers.assistant import create_router
 from app.health import HealthState, start_health_server
 from app.llm import OpenRouterChatClient
 from app.logging_setup import configure_logging
+from app.mcp_tools.client import MCPClient
 from app.service import AssistantService
 from app.store import PostgresStore
 from app.telegram import create_bot
@@ -26,19 +29,20 @@ async def run(settings: Settings) -> None:
         logger.info("PostgreSQL подключён: SELECT 1 выполнен.")
         # Начальная проверка токена и маршрута через прокси ограничена по времени.
         async with asyncio.timeout(30):
-            me = await bot.get_me()
+            await bot.get_me()
             webhook = await bot.get_webhook_info()
         if webhook.url:
             raise ConfigError(
                 "У бота установлен webhook. Удалите его перед запуском polling "
                 "или используйте отдельного учебного бота."
             )
-        logger.info("Telegram доступен. Бот @%s запускает polling.", me.username)
+        logger.info("Telegram доступен. Запускается polling.")
         store = PostgresStore(state.pool)
         await store.initialize()
-        async with OpenRouterChatClient(settings) as llm:
+        async with OpenRouterChatClient(settings) as llm, MCPClient(settings) as mcp:
+            agent = AgentService(store, AgentRouter(llm), mcp, settings)
             dispatcher = Dispatcher()
-            dispatcher.include_router(create_router(AssistantService(store, llm, settings)))
+            dispatcher.include_router(create_router(AssistantService(store, llm, settings, agent)))
             runner = await start_health_server(state, settings.health_port)
             state.polling_task = asyncio.create_task(
                 dispatcher.start_polling(

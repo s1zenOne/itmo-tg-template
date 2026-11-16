@@ -81,6 +81,9 @@ async def test_successful_shutdown_waits_for_update_handler(monkeypatch):
     llm = MagicMock()
     llm.__aenter__ = AsyncMock(return_value=llm)
     llm.__aexit__ = AsyncMock()
+    mcp = MagicMock()
+    mcp.__aenter__ = AsyncMock(return_value=mcp)
+    mcp.__aexit__ = AsyncMock()
 
     class FakeDispatcher:
         def include_router(self, _router):
@@ -97,6 +100,7 @@ async def test_successful_shutdown_waits_for_update_handler(monkeypatch):
     monkeypatch.setattr(application, "create_bot", Mock(return_value=bot))
     monkeypatch.setattr(application, "PostgresStore", Mock(return_value=store))
     monkeypatch.setattr(application, "OpenRouterChatClient", Mock(return_value=llm))
+    monkeypatch.setattr(application, "MCPClient", Mock(return_value=mcp))
     monkeypatch.setattr(application, "Dispatcher", FakeDispatcher)
     monkeypatch.setattr(application, "create_router", Mock(return_value=Mock()))
     monkeypatch.setattr(application, "start_health_server", AsyncMock(return_value=runner))
@@ -106,6 +110,7 @@ async def test_successful_shutdown_waits_for_update_handler(monkeypatch):
     store.initialize.assert_awaited_once()
     runner.cleanup.assert_awaited_once()
     llm.__aexit__.assert_awaited_once()
+    mcp.__aexit__.assert_awaited_once()
     bot.session.close.assert_awaited_once()
     pool.close.assert_awaited_once()
 

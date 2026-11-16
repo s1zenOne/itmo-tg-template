@@ -1,10 +1,14 @@
 """Telegram-команды и доставка обычного текста."""
 
 import asyncio
+from contextlib import suppress
+from uuid import UUID
 
 from aiogram import Bot, F, Router
-from aiogram.types import Message
+from aiogram.exceptions import TelegramBadRequest
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message, Update
 
+from app.agent_router import UNAVAILABLE_MESSAGE
 from app.service import AssistantService
 
 MAX_TELEGRAM_CHARS = 4096
@@ -15,6 +19,9 @@ START_TEXT = (
     "/quiz — вопросы для тренировки по теме\n"
     "/settings — режим, модель и температура; /settings 0.3 — изменить температуру\n"
     "/reset — очистить историю диалога\n"
+    "/tools — узнать, какие действия доступны\n"
+    "/timezone Europe/Moscow — задать часовой пояс\n"
+    "/why — посмотреть последнее решение агента\n"
     "/start — список команд"
 )
 
@@ -40,7 +47,11 @@ def create_router(service: AssistantService) -> Router:
     router = Router(name="assistant")
 
     @router.message(F.chat.type == "private", F.text)
-    async def handle_text(message: Message, bot: Bot) -> None:
+    async def handle_text(message: Message, bot: Bot, event_update: Update) -> None:
+        if message.from_user is None:
+            return
+        owner = message.from_user.id
+        keyboard = None
         raw = message.text or ""
         stripped = raw.lstrip()
         if stripped.startswith("/"):
@@ -59,17 +70,71 @@ def create_router(service: AssistantService) -> Router:
                     if argument
                     else await service.settings_text(message.chat.id)
                 )
+            elif command == "/tools":
+                reply = await service.agent.tools_text() if service.agent else UNAVAILABLE_MESSAGE
+            elif command == "/timezone":
+                reply = (
+                    await service.agent.timezone_text(owner, argument)
+                    if service.agent
+                    else UNAVAILABLE_MESSAGE
+                )
+            elif command == "/why":
+                reply = await service.agent.why(owner) if service.agent else UNAVAILABLE_MESSAGE
             else:
                 reply = "Неизвестная команда. Отправьте /start для списка команд."
         else:
             await bot.send_chat_action(chat_id=message.chat.id, action="typing")
             typing_task = asyncio.create_task(_refresh_typing(bot, message.chat.id))
             try:
-                reply = await service.answer(message.chat.id, raw)
+                response = await service.answer_update(
+                    message.chat.id, raw, owner_id=owner, update_id=event_update.update_id
+                )
+                reply = response.text
+                if response.confirmation is not None:
+                    keyboard = _reminder_buttons(response.confirmation)
             finally:
                 typing_task.cancel()
                 await asyncio.gather(typing_task, return_exceptions=True)
-        for part in split_reply(reply):
-            await message.answer(part, parse_mode=None)
+        parts = split_reply(reply)
+        for index, part in enumerate(parts, 1):
+            await message.answer(
+                part, parse_mode=None, reply_markup=keyboard if index == len(parts) else None
+            )
+
+    @router.callback_query(F.data.startswith("reminder:"))
+    async def handle_reminder(query: CallbackQuery) -> None:
+        message = query.message
+        if not isinstance(message, Message) or message.chat.type != "private" or not service.agent:
+            await query.answer("Действие недоступно.")
+            return
+        try:
+            _, verb, raw_id = (query.data or "").split(":")
+            action_id = UUID(hex=raw_id)
+            if verb not in {"yes", "no"} or raw_id != action_id.hex:
+                raise ValueError
+        except ValueError:
+            await query.answer("Действие недоступно.")
+            return
+        # Запись может завершиться и после потери Telegram-ответа на callback.
+        with suppress(TelegramBadRequest):
+            await query.answer()
+        reply = await service.agent.confirm(query.from_user.id, action_id, accepted=verb == "yes")
+        await message.answer(reply.text, parse_mode=None)
+        if reply.close_buttons:
+            with suppress(TelegramBadRequest):
+                await message.edit_reply_markup(reply_markup=None)
 
     return router
+
+
+def _reminder_buttons(action_id: UUID) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Подтвердить", callback_data=f"reminder:yes:{action_id.hex}"
+                ),
+                InlineKeyboardButton(text="Отменить", callback_data=f"reminder:no:{action_id.hex}"),
+            ]
+        ]
+    )

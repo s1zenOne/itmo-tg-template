@@ -3,6 +3,7 @@
 import asyncio
 import secrets
 
+from app.agent import AgentReply, AgentService
 from app.config import Settings
 from app.context import ContextLimitError, build_messages
 from app.llm import LLMError, LLMInvalidResponse, OpenRouterChatClient
@@ -14,18 +15,30 @@ CHANGED_MESSAGE = "Настройки изменились во время от�
 
 
 class AssistantService:
-    def __init__(self, store: PostgresStore, llm: OpenRouterChatClient, settings: Settings):
+    def __init__(
+        self,
+        store: PostgresStore,
+        llm: OpenRouterChatClient,
+        settings: Settings,
+        agent: AgentService | None = None,
+    ):
         self.store = store
         self.llm = llm
         self.settings = settings
+        self.agent = agent
         self._locks: dict[int, asyncio.Lock] = {}
 
     def _lock(self, chat_id: int) -> asyncio.Lock:
         return self._locks.setdefault(chat_id, asyncio.Lock())
 
     async def answer(self, chat_id: int, text: str) -> str:
+        return (await self.answer_update(chat_id, text)).text
+
+    async def answer_update(
+        self, chat_id: int, text: str, *, owner_id: int | None = None, update_id: int | None = None
+    ) -> AgentReply:
         if not text.strip():
-            return "Напишите текстовый вопрос."
+            return AgentReply("Напишите текстовый вопрос.")
         async with self._lock(chat_id):
             state, history = await self.store.get_context(
                 chat_id, self.settings.history_max_messages * 4
@@ -39,17 +52,30 @@ class AssistantService:
                     max_context_chars=self.settings.context_max_chars,
                 )
             except ContextLimitError:
-                return "Запрос слишком длинный. Сократите его и повторите."
-            try:
-                result = await self.llm.generate(messages, state.temperature, secrets.token_hex(8))
-                reply = result.text
-                if not isinstance(reply, str) or not reply.strip():
-                    raise LLMInvalidResponse
-            except LLMError as exc:
-                saved = await self.store.save_result(chat_id, state.generation, text, None)
-                return exc.user_message if saved else CHANGED_MESSAGE
-            saved = await self.store.save_result(chat_id, state.generation, text, reply)
-            return reply if saved else CHANGED_MESSAGE
+                reply = "Запрос слишком длинный. Сократите его и повторите."
+                if self.agent is not None and owner_id is not None:
+                    await self.agent.reject(owner_id, reply)
+                return AgentReply(reply)
+            if self.agent is not None and owner_id is not None and update_id is not None:
+                outcome = await self.agent.answer(owner_id, update_id, messages, state.temperature)
+            else:
+                outcome = await self._plain_answer(messages, state.temperature)
+            if outcome.replayed:
+                return outcome
+            saved = await self.store.save_result(
+                chat_id, state.generation, text, outcome.history_text
+            )
+            return outcome if saved else AgentReply(CHANGED_MESSAGE)
+
+    async def _plain_answer(self, messages: list[dict[str, str]], temperature: float) -> AgentReply:
+        try:
+            result = await self.llm.generate(messages, temperature, secrets.token_hex(8))
+            reply = result.text
+            if not isinstance(reply, str) or not reply.strip():
+                raise LLMInvalidResponse
+        except LLMError as exc:
+            return AgentReply(exc.user_message)
+        return AgentReply(reply, history_text=reply)
 
     async def switch_mode(self, chat_id: int, mode: str) -> str:
         if mode not in MODE_PROMPTS:
