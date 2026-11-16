@@ -1,0 +1,341 @@
+{
+  "started_at_utc": "2026-11-16T11:29:53.552373+00:00",
+  "status": "completed",
+  "constants": {
+    "dataset": "docs/evaluation/lab2-routing.json",
+    "dataset_sha256": "0a9c9f06f85e094ae42aaa3b684ea368b8f051055f5476ed676203e2a1afdc98",
+    "evaluation_context": {
+      "now": "2026-10-12T09:00:00+03:00",
+      "timezone": "Europe/Moscow"
+    },
+    "api": "OpenRouter /api/v1/chat/completions",
+    "model": "nvidia/nemotron-3.5-lightning:free",
+    "model_version": "nvidia/nemotron-3.5-lightning-20260807:free",
+    "provider": "Nvidia",
+    "endpoint": "nvidia/nvfp4",
+    "temperature": 0.0,
+    "timeout_seconds": 60,
+    "provider_fallbacks": false,
+    "context_max_chars": 12000,
+    "tool_execution": false,
+    "mode": "study"
+  },
+  "instruction_variant": "baseline",
+  "baseline_file": null,
+  "case_ids": [
+    "weather_1",
+    "weather_2",
+    "weather_3",
+    "schedule_1",
+    "schedule_2",
+    "schedule_3",
+    "reminder_1",
+    "reminder_2",
+    "reminder_3",
+    "respond_1",
+    "respond_2",
+    "clarify_1"
+  ],
+  "rows": [
+    {
+      "id": "weather_1",
+      "query": "Какая сейчас погода в Санкт-Петербурге?",
+      "expected_action": "get_weather",
+      "expected_arguments": {
+        "city": "Санкт-Петербург"
+      },
+      "actual_action": "get_weather",
+      "actual_arguments": {
+        "city": "Saint Petersburg"
+      },
+      "routing_correct": true,
+      "arguments_correct": true,
+      "result": "validated",
+      "model": "nvidia/nemotron-3.5-lightning:free",
+      "model_version": "nvidia/nemotron-3.5-lightning-20260807:free",
+      "provider": "Nvidia",
+      "reported_endpoint": null,
+      "usage": {
+        "prompt_tokens": 1289,
+        "completion_tokens": 90,
+        "total_tokens": 1379
+      },
+      "cost": 0.0
+    },
+    {
+      "id": "weather_2",
+      "query": "Нужен ли сегодня зонт в Казани?",
+      "expected_action": "get_weather",
+      "expected_arguments": {
+        "city": "Казань"
+      },
+      "actual_action": "get_weather",
+      "actual_arguments": {
+        "city": "Kazan"
+      },
+      "routing_correct": true,
+      "arguments_correct": true,
+      "result": "validated",
+      "model": "nvidia/nemotron-3.5-lightning:free",
+      "model_version": "nvidia/nemotron-3.5-lightning-20260807:free",
+      "provider": "Nvidia",
+      "reported_endpoint": null,
+      "usage": {
+        "prompt_tokens": 1291,
+        "completion_tokens": 142,
+        "total_tokens": 1433
+      },
+      "cost": 0.0
+    },
+    {
+      "id": "weather_3",
+      "query": "Сколько сейчас градусов в Тбилиси, Грузия?",
+      "expected_action": "get_weather",
+      "expected_arguments": {
+        "city": "Тбилиси, Грузия"
+      },
+      "actual_action": "get_weather",
+      "actual_arguments": {
+        "city": "Тбилиси, Грузия"
+      },
+      "routing_correct": true,
+      "arguments_correct": true,
+      "result": "validated",
+      "model": "nvidia/nemotron-3.5-lightning:free",
+      "model_version": "nvidia/nemotron-3.5-lightning-20260807:free",
+      "provider": "Nvidia",
+      "reported_endpoint": null,
+      "usage": {
+        "prompt_tokens": 1293,
+        "completion_tokens": 238,
+        "total_tokens": 1531
+      },
+      "cost": 0.0
+    },
+    {
+      "id": "schedule_1",
+      "query": "Какие занятия у меня сегодня?",
+      "expected_action": "get_schedule",
+      "expected_arguments": {
+        "date": "2026-10-12"
+      },
+      "actual_action": "get_schedule",
+      "actual_arguments": {
+        "date": "2026-10-12"
+      },
+      "routing_correct": true,
+      "arguments_correct": true,
+      "result": "validated",
+      "model": "nvidia/nemotron-3.5-lightning:free",
+      "model_version": "nvidia/nemotron-3.5-lightning-20260807:free",
+      "provider": "Nvidia",
+      "reported_endpoint": null,
+      "usage": {
+        "prompt_tokens": 1287,
+        "completion_tokens": 196,
+        "total_tokens": 1483
+      },
+      "cost": 0.0
+    },
+    {
+      "id": "schedule_2",
+      "query": "Покажи расписание на завтра.",
+      "expected_action": "get_schedule",
+      "expected_arguments": {
+        "date": "2026-10-13"
+      },
+      "actual_action": "get_schedule",
+      "actual_arguments": {
+        "date": "2026-10-13"
+      },
+      "routing_correct": true,
+      "arguments_correct": true,
+      "result": "validated",
+      "model": "nvidia/nemotron-3.5-lightning:free",
+      "model_version": "nvidia/nemotron-3.5-lightning-20260807:free",
+      "provider": "Nvidia",
+      "reported_endpoint": null,
+      "usage": {
+        "prompt_tokens": 1289,
+        "completion_tokens": 221,
+        "total_tokens": 1510
+      },
+      "cost": 0.0
+    },
+    {
+      "id": "schedule_3",
+      "query": "Есть ли у меня пары в ближайшее воскресенье?",
+      "expected_action": "get_schedule",
+      "expected_arguments": {
+        "date": "2026-10-18"
+      },
+      "actual_action": "get_schedule",
+      "actual_arguments": {
+        "date": "2026-10-18"
+      },
+      "routing_correct": true,
+      "arguments_correct": true,
+      "result": "validated",
+      "model": "nvidia/nemotron-3.5-lightning:free",
+      "model_version": "nvidia/nemotron-3.5-lightning-20260807:free",
+      "provider": "Nvidia",
+      "reported_endpoint": null,
+      "usage": {
+        "prompt_tokens": 1296,
+        "completion_tokens": 426,
+        "total_tokens": 1722
+      },
+      "cost": 0.0
+    },
+    {
+      "id": "reminder_1",
+      "query": "Напомни завтра в 18:30 отправить отчёт.",
+      "expected_action": "add_reminder",
+      "expected_arguments": {
+        "text": "отправить отчёт",
+        "remind_at": "2026-10-13T18:30:00+03:00"
+      },
+      "actual_action": "clarify",
+      "actual_arguments": {},
+      "routing_correct": false,
+      "arguments_correct": false,
+      "result": "validated",
+      "model": "nvidia/nemotron-3.5-lightning:free",
+      "model_version": "nvidia/nemotron-3.5-lightning-20260807:free",
+      "provider": "Nvidia",
+      "reported_endpoint": null,
+      "usage": {
+        "prompt_tokens": 1297,
+        "completion_tokens": 1499,
+        "total_tokens": 2796
+      },
+      "cost": 0.0
+    },
+    {
+      "id": "reminder_2",
+      "query": "Напомни 15 октября в 09:00 проверить расписание.",
+      "expected_action": "add_reminder",
+      "expected_arguments": {
+        "text": "проверить расписание",
+        "remind_at": "2026-10-15T09:00:00+03:00"
+      },
+      "actual_action": "clarify",
+      "actual_arguments": {},
+      "routing_correct": false,
+      "arguments_correct": false,
+      "result": "validated",
+      "model": "nvidia/nemotron-3.5-lightning:free",
+      "model_version": "nvidia/nemotron-3.5-lightning-20260807:free",
+      "provider": "Nvidia",
+      "reported_endpoint": null,
+      "usage": {
+        "prompt_tokens": 1300,
+        "completion_tokens": 528,
+        "total_tokens": 1828
+      },
+      "cost": 0.0
+    },
+    {
+      "id": "reminder_3",
+      "query": "Через два часа напомни сделать перерыв.",
+      "expected_action": "add_reminder",
+      "expected_arguments": {
+        "text": "сделать перерыв",
+        "remind_at": "2026-10-12T11:00:00+03:00"
+      },
+      "actual_action": "add_reminder",
+      "actual_arguments": {
+        "text": "Сделайте перерыв",
+        "remind_at": "2026-10-12T08:00:00+00:00"
+      },
+      "routing_correct": true,
+      "arguments_correct": false,
+      "result": "validated",
+      "normalized_timezone": "Europe/Moscow",
+      "model": "nvidia/nemotron-3.5-lightning:free",
+      "model_version": "nvidia/nemotron-3.5-lightning-20260807:free",
+      "provider": "Nvidia",
+      "reported_endpoint": null,
+      "usage": {
+        "prompt_tokens": 1290,
+        "completion_tokens": 589,
+        "total_tokens": 1879
+      },
+      "cost": 0.0
+    },
+    {
+      "id": "respond_1",
+      "query": "Кратко объясни разницу между списком и кортежем в Python.",
+      "expected_action": "respond",
+      "expected_arguments": {},
+      "actual_action": "respond",
+      "actual_arguments": {},
+      "routing_correct": true,
+      "arguments_correct": null,
+      "result": "validated",
+      "model": "nvidia/nemotron-3.5-lightning:free",
+      "model_version": "nvidia/nemotron-3.5-lightning-20260807:free",
+      "provider": "Nvidia",
+      "reported_endpoint": null,
+      "usage": {
+        "prompt_tokens": 1297,
+        "completion_tokens": 1087,
+        "total_tokens": 2384
+      },
+      "cost": 0.0
+    },
+    {
+      "id": "respond_2",
+      "query": "Переведи на английский: лабораторная работа завершена.",
+      "expected_action": "respond",
+      "expected_arguments": {},
+      "actual_action": "respond",
+      "actual_arguments": {},
+      "routing_correct": true,
+      "arguments_correct": null,
+      "result": "validated",
+      "model": "nvidia/nemotron-3.5-lightning:free",
+      "model_version": "nvidia/nemotron-3.5-lightning-20260807:free",
+      "provider": "Nvidia",
+      "reported_endpoint": null,
+      "usage": {
+        "prompt_tokens": 1293,
+        "completion_tokens": 548,
+        "total_tokens": 1841
+      },
+      "cost": 0.0
+    },
+    {
+      "id": "clarify_1",
+      "query": "Напомни вечером про лабораторную.",
+      "expected_action": "clarify",
+      "expected_arguments": {},
+      "actual_action": "clarify",
+      "actual_arguments": {},
+      "routing_correct": true,
+      "arguments_correct": null,
+      "result": "validated",
+      "model": "nvidia/nemotron-3.5-lightning:free",
+      "model_version": "nvidia/nemotron-3.5-lightning-20260807:free",
+      "provider": "Nvidia",
+      "reported_endpoint": null,
+      "usage": {
+        "prompt_tokens": 1290,
+        "completion_tokens": 317,
+        "total_tokens": 1607
+      },
+      "cost": 0.0
+    }
+  ],
+  "completed_at_utc": "2026-11-16T11:31:06.977350+00:00",
+  "metrics": {
+    "routing_accuracy": {
+      "correct": 10,
+      "total": 12
+    },
+    "argument_accuracy": {
+      "correct": 6,
+      "total": 9
+    }
+  }
+}

@@ -67,6 +67,7 @@ class Settings:
         *,
         environ: Mapping[str, str] | None = None,
         require_llm: bool = True,
+        require_runtime: bool = True,
     ) -> "Settings":
         values = {
             **dotenv_values(env_file, interpolate=False),
@@ -95,13 +96,14 @@ class Settings:
                 raise ConfigError(f"{key}: нужно целое число от {minimum} до {maximum}.") from None
 
         token = value("BOT_TOKEN")
-        try:
-            validate_token(token)
-        except TokenValidationError:
-            raise ConfigError("BOT_TOKEN: укажите токен, полученный у BotFather.") from None
         password = value("POSTGRES_PASSWORD")
-        if not password:
-            raise ConfigError("POSTGRES_PASSWORD: пароль базы данных не задан.")
+        if require_runtime:
+            try:
+                validate_token(token)
+            except TokenValidationError:
+                raise ConfigError("BOT_TOKEN: укажите токен, полученный у BotFather.") from None
+            if not password:
+                raise ConfigError("POSTGRES_PASSWORD: пароль базы данных не задан.")
         proxy = value("TELEGRAM_PROXY_URL")
         if proxy:
             try:

@@ -1,0 +1,123 @@
+{
+  "started_at_utc": "2026-11-16T11:32:39.700009+00:00",
+  "status": "completed",
+  "constants": {
+    "dataset": "docs/evaluation/lab2-routing.json",
+    "dataset_sha256": "0a9c9f06f85e094ae42aaa3b684ea368b8f051055f5476ed676203e2a1afdc98",
+    "evaluation_context": {
+      "now": "2026-10-12T09:00:00+03:00",
+      "timezone": "Europe/Moscow"
+    },
+    "api": "OpenRouter /api/v1/chat/completions",
+    "model": "nvidia/nemotron-3.5-lightning:free",
+    "model_version": "nvidia/nemotron-3.5-lightning-20260807:free",
+    "provider": "Nvidia",
+    "endpoint": "nvidia/nvfp4",
+    "temperature": 0.0,
+    "timeout_seconds": 60,
+    "provider_fallbacks": false,
+    "context_max_chars": 12000,
+    "tool_execution": false,
+    "mode": "study"
+  },
+  "instruction_variant": "reminder_preview",
+  "baseline_file": "lab2-routing-baseline.json",
+  "case_ids": [
+    "reminder_1",
+    "reminder_2",
+    "reminder_3"
+  ],
+  "rows": [
+    {
+      "id": "reminder_1",
+      "query": "Напомни завтра в 18:30 отправить отчёт.",
+      "expected_action": "add_reminder",
+      "expected_arguments": {
+        "text": "отправить отчёт",
+        "remind_at": "2026-10-13T18:30:00+03:00"
+      },
+      "actual_action": "clarify",
+      "actual_arguments": {},
+      "routing_correct": false,
+      "arguments_correct": false,
+      "result": "validated",
+      "model": "nvidia/nemotron-3.5-lightning:free",
+      "model_version": "nvidia/nemotron-3.5-lightning-20260807:free",
+      "provider": "Nvidia",
+      "reported_endpoint": null,
+      "usage": {
+        "prompt_tokens": 1330,
+        "completion_tokens": 430,
+        "total_tokens": 1760
+      },
+      "cost": 0.0
+    },
+    {
+      "id": "reminder_2",
+      "query": "Напомни 15 октября в 09:00 проверить расписание.",
+      "expected_action": "add_reminder",
+      "expected_arguments": {
+        "text": "проверить расписание",
+        "remind_at": "2026-10-15T09:00:00+03:00"
+      },
+      "actual_action": "add_reminder",
+      "actual_arguments": {
+        "text": "проверить расписание",
+        "remind_at": "2026-10-15T06:00:00+00:00"
+      },
+      "routing_correct": true,
+      "arguments_correct": true,
+      "result": "validated",
+      "normalized_timezone": "Europe/Moscow",
+      "model": "nvidia/nemotron-3.5-lightning:free",
+      "model_version": "nvidia/nemotron-3.5-lightning-20260807:free",
+      "provider": "Nvidia",
+      "reported_endpoint": null,
+      "usage": {
+        "prompt_tokens": 1333,
+        "completion_tokens": 649,
+        "total_tokens": 1982
+      },
+      "cost": 0.0
+    },
+    {
+      "id": "reminder_3",
+      "query": "Через два часа напомни сделать перерыв.",
+      "expected_action": "add_reminder",
+      "expected_arguments": {
+        "text": "сделать перерыв",
+        "remind_at": "2026-10-12T11:00:00+03:00"
+      },
+      "actual_action": "add_reminder",
+      "actual_arguments": {
+        "text": "сделать перерыв",
+        "remind_at": "2026-10-12T08:00:00+00:00"
+      },
+      "routing_correct": true,
+      "arguments_correct": true,
+      "result": "validated",
+      "normalized_timezone": "Europe/Moscow",
+      "model": "nvidia/nemotron-3.5-lightning:free",
+      "model_version": "nvidia/nemotron-3.5-lightning-20260807:free",
+      "provider": "Nvidia",
+      "reported_endpoint": null,
+      "usage": {
+        "prompt_tokens": 1323,
+        "completion_tokens": 779,
+        "total_tokens": 2102
+      },
+      "cost": 0.0
+    }
+  ],
+  "completed_at_utc": "2026-11-16T11:32:59.515973+00:00",
+  "metrics": {
+    "routing_accuracy": {
+      "correct": 2,
+      "total": 3
+    },
+    "argument_accuracy": {
+      "correct": 2,
+      "total": 3
+    }
+  }
+}
