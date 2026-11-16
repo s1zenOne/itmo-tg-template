@@ -1,9 +1,24 @@
-"""Постоянные настройки и история отдельных чатов."""
+"""Постоянные настройки, история, напоминания и аудит отдельных пользователей."""
 
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from uuid import UUID, uuid4
 
 import asyncpg
+
+from app.migrate import migrate
+from app.reminders import (
+    PreparedReminder,
+    ReminderError,
+    SavedReminder,
+    get_user_zone,
+    normalize_reminder_text,
+    reminder_display_time,
+)
+
+CONFIRMATION_TTL = timedelta(minutes=5)
+ACTIVE_STATUSES = {"pending", "confirmed"}
 
 
 @dataclass(frozen=True)
@@ -19,40 +34,26 @@ class HistoryMessage:
     content: str
 
 
+@dataclass(frozen=True)
+class AuditDecision:
+    """Резюме из безопасных значений, сформированных кодом приложения."""
+
+    requested_at: datetime
+    action: str
+    tool: str | None
+    arguments: str
+    validation: str
+    execution: str
+    duration_ms: int
+    reason: str
+
+
 class PostgresStore:
     def __init__(self, pool: asyncpg.Pool):
         self.pool = pool
 
     async def initialize(self) -> None:
-        async with self.pool.acquire() as connection:
-            await connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS chat_settings (
-                    chat_id BIGINT PRIMARY KEY,
-                    mode TEXT NOT NULL DEFAULT 'study'
-                        CHECK (mode IN ('study', 'translate', 'quiz')),
-                    temperature NUMERIC(2,1) NOT NULL DEFAULT 0.3
-                        CHECK (temperature IN (0.0, 0.3, 0.7, 1.0)),
-                    generation BIGINT NOT NULL DEFAULT 0
-                )
-                """
-            )
-            await connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS chat_history (
-                    id BIGSERIAL PRIMARY KEY,
-                    chat_id BIGINT NOT NULL REFERENCES chat_settings(chat_id) ON DELETE CASCADE,
-                    role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
-                    content TEXT NOT NULL
-                )
-                """
-            )
-            await connection.execute(
-                """
-                CREATE INDEX IF NOT EXISTS chat_history_chat_id_id_idx
-                ON chat_history (chat_id, id DESC)
-                """
-            )
+        await migrate(self.pool)
 
     @staticmethod
     async def _ensure_user(connection: asyncpg.Connection, chat_id: int) -> None:
@@ -145,3 +146,222 @@ class PostgresStore:
                     assistant_text,
                 )
         return True
+
+    async def get_timezone(self, owner_id: int) -> str | None:
+        return await self.pool.fetchval(
+            "SELECT timezone FROM chat_settings WHERE chat_id = $1", owner_id
+        )
+
+    async def set_timezone(self, owner_id: int, zone: str) -> None:
+        get_user_zone(zone)
+        await self.pool.execute(
+            "INSERT INTO chat_settings (chat_id, timezone) VALUES ($1, $2) "
+            "ON CONFLICT (chat_id) DO UPDATE SET timezone = EXCLUDED.timezone",
+            owner_id,
+            zone,
+        )
+
+    async def write_audit(self, owner_id: int, decision: AuditDecision) -> None:
+        async with self.pool.acquire() as connection, connection.transaction():
+            await self._ensure_user(connection, owner_id)
+            await connection.execute(
+                """
+                INSERT INTO agent_audit
+                    (owner_id, requested_at, action, tool, arguments, validation, execution,
+                     duration_ms, reason)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                """,
+                owner_id,
+                decision.requested_at,
+                decision.action,
+                decision.tool,
+                decision.arguments,
+                decision.validation,
+                decision.execution,
+                decision.duration_ms,
+                decision.reason,
+            )
+
+    async def latest_audit(self, owner_id: int) -> AuditDecision | None:
+        row = await self.pool.fetchrow(
+            """
+            SELECT requested_at, action, tool, arguments, validation, execution, duration_ms, reason
+            FROM agent_audit WHERE owner_id = $1 ORDER BY requested_at DESC, id DESC LIMIT 1
+            """,
+            owner_id,
+        )
+        return AuditDecision(**dict(row)) if row else None
+
+    @staticmethod
+    def _prepared(row: asyncpg.Record, now: datetime) -> PreparedReminder:
+        status = row["status"]
+        if status in ACTIVE_STATUSES and row["expires_at"] <= now:
+            status = "expired"
+        return PreparedReminder(
+            row["action_id"],
+            row["text"],
+            row["remind_at"],
+            row["timezone"],
+            row["expires_at"],
+            status,
+        )
+
+    @staticmethod
+    async def _now(connection: asyncpg.Connection, now: datetime | None) -> datetime:
+        return now if now is not None else await connection.fetchval("SELECT clock_timestamp()")
+
+    @staticmethod
+    async def _locked_action(
+        connection: asyncpg.Connection, owner_id: int, action_id: UUID
+    ) -> asyncpg.Record:
+        row = await connection.fetchrow(
+            "SELECT * FROM reminder_actions WHERE owner_id = $1 AND action_id = $2 FOR UPDATE",
+            owner_id,
+            action_id,
+        )
+        if row is None:
+            raise ReminderError("unavailable")
+        return row
+
+    async def reminder_for_update(
+        self, owner_id: int, update_id: int, *, now: datetime | None = None
+    ) -> PreparedReminder | None:
+        async with self.pool.acquire() as connection:
+            row = await connection.fetchrow(
+                "SELECT * FROM reminder_actions WHERE owner_id = $1 AND update_id = $2",
+                owner_id,
+                update_id,
+            )
+            return self._prepared(row, await self._now(connection, now)) if row else None
+
+    async def get_prepared_reminder(
+        self, owner_id: int, action_id: UUID, *, now: datetime | None = None
+    ) -> PreparedReminder:
+        async with self.pool.acquire() as connection:
+            row = await connection.fetchrow(
+                "SELECT * FROM reminder_actions WHERE owner_id = $1 AND action_id = $2",
+                owner_id,
+                action_id,
+            )
+            if row is None:
+                raise ReminderError("unavailable")
+            return self._prepared(row, await self._now(connection, now))
+
+    async def prepare_reminder(
+        self,
+        owner_id: int,
+        update_id: int,
+        text: str,
+        remind_at: datetime,
+        timezone: str,
+        *,
+        now: datetime | None = None,
+    ) -> PreparedReminder:
+        async with self.pool.acquire() as connection, connection.transaction():
+            await self._ensure_user(connection, owner_id)
+            current = await self._now(connection, now)
+            lookup = "SELECT * FROM reminder_actions WHERE owner_id = $1 AND update_id = $2"
+            existing = await connection.fetchrow(lookup, owner_id, update_id)
+            if existing is not None:
+                return self._prepared(existing, current)
+            text = normalize_reminder_text(text)
+            if remind_at.utcoffset() is None:
+                raise ReminderError("invalid_time")
+            remind_at = remind_at.astimezone(UTC)
+            if remind_at <= current:
+                raise ReminderError("past")
+            reminder_display_time(remind_at, timezone)
+            row = await connection.fetchrow(
+                """
+                INSERT INTO reminder_actions
+                    (action_id, owner_id, update_id, text, remind_at, timezone, expires_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                ON CONFLICT (owner_id, update_id) DO NOTHING RETURNING *
+                """,
+                uuid4(),
+                owner_id,
+                update_id,
+                text,
+                remind_at,
+                timezone,
+                current + CONFIRMATION_TTL,
+            )
+            if row is None:
+                row = await connection.fetchrow(lookup, owner_id, update_id)
+            return self._prepared(row, await self._now(connection, now))
+
+    @staticmethod
+    def _require_active(prepared: PreparedReminder, now: datetime) -> None:
+        if prepared.status not in ACTIVE_STATUSES:
+            raise ReminderError(prepared.status)
+        if prepared.remind_at <= now:
+            raise ReminderError("past")
+
+    async def confirm_reminder(
+        self, owner_id: int, action_id: UUID, *, now: datetime | None = None
+    ) -> PreparedReminder:
+        async with self.pool.acquire() as connection, connection.transaction():
+            row = await self._locked_action(connection, owner_id, action_id)
+            current = await self._now(connection, now)
+            prepared = self._prepared(row, current)
+            if prepared.status == "executed":
+                return prepared
+            self._require_active(prepared, current)
+            if prepared.status == "pending":
+                row = await connection.fetchrow(
+                    "UPDATE reminder_actions SET status = 'confirmed' "
+                    "WHERE action_id = $1 RETURNING *",
+                    action_id,
+                )
+            return self._prepared(row, current)
+
+    async def cancel_reminder(
+        self, owner_id: int, action_id: UUID, *, now: datetime | None = None
+    ) -> PreparedReminder:
+        async with self.pool.acquire() as connection, connection.transaction():
+            row = await self._locked_action(connection, owner_id, action_id)
+            current = await self._now(connection, now)
+            prepared = self._prepared(row, current)
+            if prepared.status == "cancelled":
+                return prepared
+            self._require_active(prepared, current)
+            row = await connection.fetchrow(
+                "UPDATE reminder_actions SET status = 'cancelled' WHERE action_id = $1 RETURNING *",
+                action_id,
+            )
+            return self._prepared(row, current)
+
+    async def execute_reminder(
+        self,
+        owner_id: int,
+        action_id: UUID,
+        text: str,
+        remind_at: datetime,
+        *,
+        now: datetime | None = None,
+    ) -> SavedReminder:
+        if remind_at.utcoffset() is None:
+            raise ReminderError("invalid_time")
+        async with self.pool.acquire() as connection, connection.transaction():
+            row = await self._locked_action(connection, owner_id, action_id)
+            current = await self._now(connection, now)
+            prepared = self._prepared(row, current)
+            if text != prepared.text or remind_at.astimezone(UTC) != prepared.remind_at:
+                raise ReminderError("mismatched")
+            if prepared.status == "executed":
+                reminder_id = await connection.fetchval(
+                    "SELECT id FROM reminders WHERE action_id = $1", action_id
+                )
+                return SavedReminder(reminder_id, prepared.remind_at, prepared.timezone, False)
+            self._require_active(prepared, current)
+            if prepared.status != "confirmed":
+                raise ReminderError("unconfirmed")
+            reminder_id = await connection.fetchval(
+                "INSERT INTO reminders (action_id, created_at) VALUES ($1, $2) RETURNING id",
+                action_id,
+                current,
+            )
+            await connection.execute(
+                "UPDATE reminder_actions SET status = 'executed' WHERE action_id = $1", action_id
+            )
+            return SavedReminder(reminder_id, prepared.remind_at, prepared.timezone, True)
