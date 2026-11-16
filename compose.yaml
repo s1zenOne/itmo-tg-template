@@ -40,6 +40,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Задайте POSTGRES_PASSWORD}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       HEALTH_PORT: ${HEALTH_PORT:-8080}
+      SCHEDULE_PATH: ${SCHEDULE_PATH:-app/mcp_tools/data/schedule.json}
+      SCHEDULE_TIMEZONE: ${SCHEDULE_TIMEZONE:-Europe/Moscow}
     depends_on:
       db:
         condition: service_healthy

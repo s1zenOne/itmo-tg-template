@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlsplit
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from aiogram.utils.token import TokenValidationError, validate_token
 from dotenv import dotenv_values
@@ -15,6 +16,8 @@ class ConfigError(ValueError):
     """Ошибка настройки без секретных значений в сообщении."""
 
 
+DEFAULT_SCHEDULE_PATH = Path("app/mcp_tools/data/schedule.json")
+DEFAULT_SCHEDULE_TIMEZONE = "Europe/Moscow"
 OPENROUTER_API_BASE_URL = "https://openrouter.ai/api/v1"
 DEFAULT_OPENROUTER_MODELS = (
     "google/gemma-4-26b-a4b-it:free",
@@ -54,6 +57,8 @@ class Settings:
     postgres_user: str = "bot"
     log_level: str = "INFO"
     health_port: int = 8080
+    schedule_path: Path = DEFAULT_SCHEDULE_PATH
+    schedule_timezone: str = DEFAULT_SCHEDULE_TIMEZONE
 
     @classmethod
     def load(
@@ -134,6 +139,11 @@ class Settings:
         history_max_messages = positive_int("HISTORY_MAX_MESSAGES", "12", 2, 100)
         if history_max_messages % 2:
             raise ConfigError("HISTORY_MAX_MESSAGES: нужно чётное число.")
+        schedule_timezone = value("SCHEDULE_TIMEZONE", DEFAULT_SCHEDULE_TIMEZONE)
+        try:
+            ZoneInfo(schedule_timezone)
+        except (ZoneInfoNotFoundError, ValueError):
+            raise ConfigError("SCHEDULE_TIMEZONE требует имя зоны IANA.") from None
         return cls(
             bot_token=token,
             postgres_password=password,
@@ -150,4 +160,6 @@ class Settings:
             postgres_user=value("POSTGRES_USER", "bot"),
             log_level=level,
             health_port=port("HEALTH_PORT", "8080"),
+            schedule_path=Path(value("SCHEDULE_PATH", str(DEFAULT_SCHEDULE_PATH))),
+            schedule_timezone=schedule_timezone,
         )

@@ -253,6 +253,10 @@ def test_deploy_archive_never_contains_env_or_keys(tmp_path):
 
     (tmp_path / "app").mkdir()
     (tmp_path / "app" / "__init__.py").write_text("", encoding="utf-8")
+    (tmp_path / "app" / "migrations").mkdir()
+    (tmp_path / "app" / "migrations" / "0001_lab1.sql").write_text("SELECT 1;")
+    (tmp_path / "app" / "mcp_tools" / "data").mkdir(parents=True)
+    (tmp_path / "app" / "mcp_tools" / "data" / "schedule.json").write_text("{}")
     (tmp_path / "app" / ".env").write_text("SECRET=yes", encoding="utf-8")
     (tmp_path / ".env.cloud").write_text("SECRET=yes", encoding="utf-8")
     (tmp_path / ".deploy").mkdir()
@@ -262,7 +266,11 @@ def test_deploy_archive_never_contains_env_or_keys(tmp_path):
     with tarfile.open(path) as archive:
         names = archive.getnames()
     # Assert
-    assert "app/__init__.py" in names
+    assert set(names) == {
+        "app/__init__.py",
+        "app/mcp_tools/data/schedule.json",
+        "app/migrations/0001_lab1.sql",
+    }
     assert all(".env" not in n and "id_ed25519" not in n for n in names)
 
 
@@ -321,6 +329,10 @@ def test_deploy_uploads_secrets_only_over_ssh_stdin(tmp_path, monkeypatch):
     deployment = cloud(tmp_path, FakeYC())
     (tmp_path / "app").mkdir()
     (tmp_path / "app" / "__init__.py").write_text("", encoding="utf-8")
+    (tmp_path / "app" / "migrations").mkdir()
+    (tmp_path / "app" / "migrations" / "0001_lab1.sql").write_text("SELECT 1;")
+    (tmp_path / "app" / "mcp_tools" / "data").mkdir(parents=True)
+    (tmp_path / "app" / "mcp_tools" / "data" / "schedule.json").write_text("{}")
     calls = []
 
     def ssh(instance, command, **kwargs):

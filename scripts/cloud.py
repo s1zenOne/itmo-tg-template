@@ -81,6 +81,8 @@ def source_archive(root: Path) -> Path:
         ]
     ]
     candidates.extend((root / "app").rglob("*.py"))
+    candidates.extend((root / "app" / "migrations").glob("*.sql"))
+    candidates.append(root / "app" / "mcp_tools" / "data" / "schedule.json")
     with tarfile.open(archive_path, "w:gz") as archive:
         for path in sorted(candidates):
             if path.is_file() and "__pycache__" not in path.parts and not path.is_symlink():
@@ -433,7 +435,11 @@ class Cloud:
             archive.unlink(missing_ok=True)
         # Конфиг передаётся по stdin SSH, не через argv, Docker build или metadata.
         values = {key.upper(): str(value) for key, value in asdict(settings).items()}
-        values.update(POSTGRES_HOST="db", POSTGRES_PORT="5432")
+        values.update(
+            POSTGRES_HOST="db",
+            POSTGRES_PORT="5432",
+            OPENROUTER_MODELS=",".join(settings.openrouter_models),
+        )
         content = "".join(f"{key}={compose_quote(value)}\n" for key, value in values.items())
         payload = base64.b64encode(content.encode("utf-8")).decode("ascii")
         self.ssh(
