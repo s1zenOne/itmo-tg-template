@@ -104,6 +104,27 @@ async def test_weather_unknown_city():
     assert weather.session.get.call_count == 1
 
 
+async def test_weather_skips_incomplete_geocoding_results():
+    incomplete = {key: value for key, value in HELSINKI.items() if key != "country"}
+    weather = _weather(
+        _response(200, {"generationtime_ms": 0.2, "results": [HELSINKI, incomplete]}),
+        _response(200, FORECAST),
+    )
+    async with Client(create_server(weather, FileSchedule())) as client:
+        result = await client.call_tool(WEATHER, {"city": "Helsinki"})
+    assert not result.is_error
+    assert result.structured_content["city"] == "Helsinki"
+    assert result.structured_content["temperature_c"] == 3.1
+
+
+async def test_weather_rejects_geocoding_with_no_valid_results():
+    incomplete = {key: value for key, value in HELSINKI.items() if key != "country"}
+    weather = _weather(_response(200, {"generationtime_ms": 0.2, "results": [incomplete]}))
+    with pytest.raises(ToolError, match="weather_invalid_response"):
+        await weather.get_weather("Helsinki")
+    assert weather.session.get.call_count == 1
+
+
 @pytest.mark.parametrize("kind", ["timeout", "http_503", "malformed_json", "invalid_data"])
 async def test_weather_errors_and_bounded_retries(kind):
     match kind:

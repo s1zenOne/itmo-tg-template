@@ -75,7 +75,7 @@ class GeocodedPlace(ProviderData):
 
 class GeocodingResult(ProviderData):
     generationtime_ms: FiniteFloat
-    results: Annotated[list[GeocodedPlace], Field(max_length=100)] = Field(default_factory=list)
+    results: Annotated[list[object], Field(max_length=100)] = Field(default_factory=list)
 
 
 class CurrentWeather(ProviderData):
@@ -143,9 +143,17 @@ class OpenMeteoWeather:
                     "count": 100,
                 },
             )
-            places = GeocodingResult.model_validate(data).results
-            if not places:
+            results = GeocodingResult.model_validate(data).results
+            if not results:
                 raise ToolError("city_not_found")
+            places = []
+            for result in results:
+                try:
+                    places.append(GeocodedPlace.model_validate(result))
+                except ValidationError:
+                    continue
+            if not places:
+                raise ToolError("weather_invalid_response")
 
             requested = _normalized_name(city.split(",", 1)[0])
             exact = [place for place in places if _normalized_name(place.name) == requested]
