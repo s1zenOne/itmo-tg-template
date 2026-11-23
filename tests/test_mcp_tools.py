@@ -97,6 +97,45 @@ async def test_weather_structured_result_through_mcp():
     assert forecast.kwargs["params"]["longitude"] == HELSINKI["longitude"]
 
 
+async def test_confirmed_coordinates_through_mcp_skip_geocoding():
+    weather = _weather(_response(200, FORECAST))
+    async with Client(create_server(weather, FileSchedule())) as client:
+        result = await client.call_tool(
+            WEATHER,
+            {
+                "city": "Helsinki",
+                "country": "Finland",
+                "region": "Uusimaa",
+                "latitude": 60.1695,
+                "longitude": 24.9354,
+            },
+        )
+    assert not result.is_error
+    assert validate_result(WEATHER, result.structured_content)["temperature_c"] == 3.1
+    assert result.structured_content["city"] == "Helsinki"
+    weather.session.get.assert_called_once()
+    request = weather.session.get.call_args
+    assert request.args == (FORECAST_URL,)
+    assert request.kwargs["params"]["latitude"] == 60.1695
+    assert request.kwargs["params"]["longitude"] == 24.9354
+
+
+@pytest.mark.parametrize(
+    "coordinates",
+    [
+        {"city": "Helsinki", "country": "Finland", "latitude": 91, "longitude": 24},
+        {"city": "Helsinki", "country": "Finland", "latitude": 60, "longitude": float("nan")},
+        {"city": "Helsinki", "latitude": 60, "longitude": 24},
+    ],
+)
+async def test_coordinates_contract_rejects_invalid_input_before_provider(coordinates):
+    weather = _weather()
+    async with Client(create_server(weather, FileSchedule())) as client:
+        result = await client.call_tool(WEATHER, coordinates)
+    assert result.is_error
+    weather.session.get.assert_not_called()
+
+
 async def test_weather_unknown_city():
     weather = _weather(_response(200, {"generationtime_ms": 0.1}))
     with pytest.raises(ToolError, match="city_not_found"):
@@ -231,9 +270,9 @@ async def test_current_week_resource_uses_timezone_at_year_boundary(tmp_path):
     async with Client(create_server(_weather(), schedule)) as client:
         resources = (await client.list_resources()).resources
         result = await client.read_resource(WEEK_URI)
-    assert len(resources) == 1
-    assert str(resources[0].uri) == WEEK_URI
-    assert resources[0].mime_type == "application/json"
+    by_uri = {str(resource.uri): resource for resource in resources}
+    assert set(by_uri) == {WEEK_URI, "materials://catalog"}
+    assert by_uri[WEEK_URI].mime_type == "application/json"
     week = json.loads(result.contents[0].text)
     assert week["timezone"] == "Europe/Moscow"
     assert [day["date"] for day in week["days"]] == [

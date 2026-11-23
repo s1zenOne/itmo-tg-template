@@ -28,15 +28,19 @@ from app.config import Settings
 from app.db import create_pool
 from app.mcp_tools.auth import GRANT_KEY_ENV, verify_grant
 from app.mcp_tools.contracts import (
+    CATALOG_URI,
+    MATERIALS,
     REMINDER,
     SCHEDULE,
     WEATHER,
     WEEK_URI,
     ReminderResult,
     ToolError,
+    WeatherResult,
     tool_definitions,
     validate_arguments,
 )
+from app.mcp_tools.materials import FileMaterials
 from app.mcp_tools.schedule import DEFAULT_PATH, DEFAULT_TIMEZONE, FileSchedule
 from app.mcp_tools.weather import OpenMeteoWeather
 from app.reminders import ReminderError, SavedReminder
@@ -60,8 +64,10 @@ def create_server(
     *,
     grant_key: bytes | None = None,
     write_reminder: ReminderWriter | None = None,
+    materials: FileMaterials | None = None,
 ) -> Server:
     tools = tool_definitions()
+    materials = materials or FileMaterials()
     resource = Resource(
         uri=WEEK_URI,
         name="current-week",
@@ -69,23 +75,32 @@ def create_server(
         mime_type="application/json",
     )
 
+    catalog_resource = Resource(
+        uri=CATALOG_URI,
+        name="materials-catalog",
+        description="Каталог обезличенных учебных документов.",
+        mime_type="application/json",
+    )
+
     async def list_tools(_context, _params):
         return ListToolsResult(tools=list(tools))
 
     async def list_resources(_context, _params):
-        return ListResourcesResult(resources=[resource])
+        return ListResourcesResult(resources=[resource, catalog_resource])
 
     async def read_resource(_context, params):
-        if str(params.uri) != WEEK_URI:
+        uri = str(params.uri)
+        if uri not in {WEEK_URI, CATALOG_URI}:
             raise MCPError(ErrorData(code=-32002, message="resource_not_found"))
+        selected = resource if uri == WEEK_URI else catalog_resource
         try:
-            result = await schedule.current_week()
+            result = await schedule.current_week() if uri == WEEK_URI else await materials.catalog()
         except ToolError as exc:
             raise MCPError(ErrorData(code=-32603, message=exc.code)) from None
         return ReadResourceResult(
             contents=[
                 TextResourceContents(
-                    uri=resource.uri, mime_type=resource.mime_type, text=result.model_dump_json()
+                    uri=selected.uri, mime_type=selected.mime_type, text=result.model_dump_json()
                 )
             ]
         )
@@ -95,9 +110,22 @@ def create_server(
             name = params.name
             arguments = validate_arguments(name, params.arguments)
             if name == WEATHER:
-                result = await weather.get_weather(arguments["city"])
+                if "latitude" in arguments:
+                    observation = await weather.get_weather_at_coordinates(
+                        arguments["latitude"], arguments["longitude"]
+                    )
+                    result = WeatherResult(
+                        **observation.model_dump(),
+                        city=arguments["city"],
+                        country=arguments["country"],
+                        region=arguments.get("region"),
+                    )
+                else:
+                    result = await weather.get_weather(arguments["city"])
             elif name == SCHEDULE:
                 result = await schedule.get_schedule(arguments["date"])
+            elif name == MATERIALS:
+                result = await materials.search(arguments["query"], arguments["limit"])
             elif name == REMINDER:
                 owner_id, action_id = verify_grant(grant_key, name, arguments, params.meta)
                 if write_reminder is None:

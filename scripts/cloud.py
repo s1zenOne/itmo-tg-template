@@ -83,6 +83,8 @@ def source_archive(root: Path) -> Path:
     candidates.extend((root / "app").rglob("*.py"))
     candidates.extend((root / "app" / "migrations").glob("*.sql"))
     candidates.append(root / "app" / "mcp_tools" / "data" / "schedule.json")
+    for name in ("mcp.md", "context.md", "idempotency.md"):
+        candidates.append(root / "app" / "mcp_tools" / "data" / "materials" / name)
     with tarfile.open(archive_path, "w:gz") as archive:
         for path in sorted(candidates):
             if path.is_file() and "__pycache__" not in path.parts and not path.is_symlink():

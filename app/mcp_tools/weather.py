@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, ValidationError
 from app.mcp_tools.contracts import (
     WEATHER_SOURCE,
     AmbiguousWeatherResult,
+    CoordinateWeatherResult,
     Place,
     ShortLabel,
     ToolError,
@@ -167,11 +168,27 @@ class OpenMeteoWeather:
                 )
 
             place = next(iter(options.values()))
+            observation = await self.get_weather_at_coordinates(place.latitude, place.longitude)
+            return WeatherResult(**place.place.model_dump(), **observation.model_dump())
+        except (
+            ValidationError,
+            KeyError,
+            ValueError,
+            OSError,
+            OverflowError,
+            ZoneInfoNotFoundError,
+        ):
+            raise ToolError("weather_invalid_response") from None
+
+    async def get_weather_at_coordinates(
+        self, latitude: float, longitude: float
+    ) -> CoordinateWeatherResult:
+        try:
             raw = await self._get_json(
                 FORECAST_URL,
                 {
-                    "latitude": place.latitude,
-                    "longitude": place.longitude,
+                    "latitude": latitude,
+                    "longitude": longitude,
                     "current": "temperature_2m,weather_code,wind_speed_10m",
                     "temperature_unit": "celsius",
                     "wind_speed_unit": "kmh",
@@ -182,8 +199,7 @@ class OpenMeteoWeather:
             forecast = ForecastResult.model_validate(raw)
             current = forecast.current
             instant = datetime.fromtimestamp(current.time, ZoneInfo(forecast.timezone))
-            return WeatherResult(
-                **place.place.model_dump(),
+            return CoordinateWeatherResult(
                 status="ok",
                 temperature_c=current.temperature_2m,
                 conditions=CONDITIONS[current.weather_code],

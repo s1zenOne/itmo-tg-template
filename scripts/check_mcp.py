@@ -27,8 +27,9 @@ async def run(weather_city: str | None) -> int:
             "get_weather": True,
             "get_schedule": True,
             "add_reminder": False,
+            "search_materials": True,
         }
-        assert [str(resource.uri) for resource in resources] == [WEEK_URI]
+        assert {str(resource.uri) for resource in resources} == {WEEK_URI, "materials://catalog"}
         for tool in tools:
             Draft202012Validator.check_schema(tool.input_schema)
             Draft202012Validator.check_schema(tool.output_schema)
@@ -53,6 +54,12 @@ async def run(weather_city: str | None) -> int:
         assert [day["date"] for day in days] == [
             (monday + timedelta(days=i)).isoformat() for i in range(7)
         ]
+
+        catalog = await client.read_resource("materials://catalog")
+        assert len(json.loads(catalog.contents[0].text)["documents"]) >= 3
+        found = await client.call_tool("search_materials", {"query": "MCP", "limit": 2})
+        assert not found.is_error and found.structured_content["documents"]
+        Draft202012Validator(schemas["search_materials"]).validate(found.structured_content)
 
         denied = await client.call_tool(
             "add_reminder",

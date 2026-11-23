@@ -9,6 +9,8 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message, Update
 
 from app.agent_router import UNAVAILABLE_MESSAGE
+from app.mcp_tools.contracts import ToolError
+from app.notifications import NotificationService
 from app.service import AssistantService
 
 MAX_TELEGRAM_CHARS = 4096
@@ -21,6 +23,10 @@ START_TEXT = (
     "/reset — очистить историю диалога\n"
     "/tools — узнать, какие действия доступны\n"
     "/timezone Europe/Moscow — задать часовой пояс\n"
+    "/city город, страна — выбрать город для сводки\n"
+    "/briefing_on и /briefing_off — включить или выключить сводку\n"
+    "/notifications — настройки уведомлений\n"
+    "/trace last или /trace ID — посмотреть свою трассу\n"
     "/why — посмотреть последнее решение агента\n"
     "/start — список команд"
 )
@@ -43,7 +49,9 @@ def split_reply(text: str) -> list[str]:
     ]
 
 
-def create_router(service: AssistantService) -> Router:
+def create_router(
+    service: AssistantService, *, notifications: NotificationService | None = None
+) -> Router:
     router = Router(name="assistant")
 
     @router.message(F.chat.type == "private", F.text)
@@ -51,6 +59,8 @@ def create_router(service: AssistantService) -> Router:
         if message.from_user is None:
             return
         owner = message.from_user.id
+        if notifications is not None:
+            await notifications.register_private(owner, message.chat.id)
         keyboard = None
         raw = message.text or ""
         stripped = raw.lstrip()
@@ -80,6 +90,30 @@ def create_router(service: AssistantService) -> Router:
                 )
             elif command == "/why":
                 reply = await service.agent.why(owner) if service.agent else UNAVAILABLE_MESSAGE
+            elif command == "/trace":
+                reply = (
+                    await service.agent.trace(owner, argument)
+                    if service.agent
+                    else UNAVAILABLE_MESSAGE
+                )
+            elif command == "/city" and notifications is not None:
+                try:
+                    proposal = await notifications.prepare_city(
+                        owner, message.chat.id, event_update.update_id, argument
+                    )
+                    reply = f"Выберите город: {proposal.label}. Подтвердить выбор?"
+                    keyboard = _city_buttons(proposal.action_id)
+                except ToolError as exc:
+                    reply = {
+                        "invalid_city": "Укажите город и страну: /city Казань, Россия.",
+                        "city_not_found": "Город не найден. Укажите город и страну полностью.",
+                        "city_ambiguous": "Найдено несколько городов. Уточните название и страну.",
+                        "city_expired": "Подтверждение устарело. Повторите /city.",
+                    }.get(exc.code, "Геокодирование недоступно. Повторите попытку позже.")
+            elif command in {"/briefing_on", "/briefing_off"} and notifications is not None:
+                reply = await notifications.set_briefing(owner, command == "/briefing_on")
+            elif command == "/notifications" and notifications is not None:
+                reply = await notifications.settings_text(owner)
             else:
                 reply = "Неизвестная команда. Отправьте /start для списка команд."
         else:
@@ -124,6 +158,37 @@ def create_router(service: AssistantService) -> Router:
             with suppress(TelegramBadRequest):
                 await message.edit_reply_markup(reply_markup=None)
 
+    @router.callback_query(F.data.startswith("city:"))
+    async def handle_city(query: CallbackQuery) -> None:
+        message = query.message
+        if (
+            not isinstance(message, Message)
+            or message.chat.type != "private"
+            or notifications is None
+        ):
+            await query.answer("Действие недоступно.")
+            return
+        try:
+            _, verb, raw_id = (query.data or "").split(":")
+            action_id = UUID(hex=raw_id)
+            if verb not in {"yes", "no"} or raw_id != action_id.hex:
+                raise ValueError
+        except ValueError:
+            await query.answer("Действие недоступно.")
+            return
+        accepted = verb == "yes"
+        saved = await notifications.confirm_city(
+            query.from_user.id, message.chat.id, action_id, accepted=accepted
+        )
+        with suppress(TelegramBadRequest):
+            await query.answer()
+        if not saved:
+            await message.answer("Подтверждение недоступно или устарело. Повторите /city.")
+            return
+        await message.answer("Город сохранён." if accepted else "Выбор города отменён.")
+        with suppress(TelegramBadRequest):
+            await message.edit_reply_markup(reply_markup=None)
+
     return router
 
 
@@ -135,6 +200,17 @@ def _reminder_buttons(action_id: UUID) -> InlineKeyboardMarkup:
                     text="Подтвердить", callback_data=f"reminder:yes:{action_id.hex}"
                 ),
                 InlineKeyboardButton(text="Отменить", callback_data=f"reminder:no:{action_id.hex}"),
+            ]
+        ]
+    )
+
+
+def _city_buttons(action_id: UUID) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="Подтвердить", callback_data=f"city:yes:{action_id.hex}"),
+                InlineKeyboardButton(text="Отменить", callback_data=f"city:no:{action_id.hex}"),
             ]
         ]
     )

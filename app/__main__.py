@@ -6,16 +6,21 @@ from aiogram import Dispatcher
 
 from app.agent import AgentService
 from app.agent_router import AgentRouter
+from app.briefing import BriefingBuilder
 from app.config import ConfigError, Settings
 from app.db import create_pool
+from app.delivery import DeliveryService
 from app.handlers.assistant import create_router
 from app.health import HealthState, start_health_server
 from app.llm import OpenRouterChatClient
 from app.logging_setup import configure_logging
 from app.mcp_tools.client import MCPClient
+from app.notifications import NotificationService
 from app.service import AssistantService
 from app.store import PostgresStore
+from app.supervisor import SpecialistRouter
 from app.telegram import create_bot
+from app.tracing import TraceRecorder
 
 logger = logging.getLogger("app")
 
@@ -40,9 +45,21 @@ async def run(settings: Settings) -> None:
         store = PostgresStore(state.pool)
         await store.initialize()
         async with OpenRouterChatClient(settings) as llm, MCPClient(settings) as mcp:
-            agent = AgentService(store, AgentRouter(llm), mcp, settings)
+            agent = AgentService(
+                store,
+                AgentRouter(llm),
+                mcp,
+                settings,
+                specialist_router=SpecialistRouter(llm),
+                traces=TraceRecorder(state.pool),
+            )
             dispatcher = Dispatcher()
-            dispatcher.include_router(create_router(AssistantService(store, llm, settings, agent)))
+            dispatcher.include_router(
+                create_router(
+                    AssistantService(store, llm, settings, agent),
+                    notifications=NotificationService(state.pool),
+                )
+            )
             runner = await start_health_server(state, settings.health_port)
             state.polling_task = asyncio.create_task(
                 dispatcher.start_polling(
@@ -52,8 +69,15 @@ async def run(settings: Settings) -> None:
                     close_bot_session=False,
                 )
             )
+            delivery_task = asyncio.create_task(
+                DeliveryService(state.pool, bot, briefing_builder=BriefingBuilder(mcp)).run()
+            )
             state.initialized = True
-            await state.polling_task
+            try:
+                await state.polling_task
+            finally:
+                delivery_task.cancel()
+                await asyncio.gather(delivery_task, return_exceptions=True)
     finally:
         state.initialized = False
         if state.polling_task and not state.polling_task.done():

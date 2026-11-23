@@ -57,7 +57,18 @@ class AssistantService:
                     await self.agent.reject(owner_id, reply)
                 return AgentReply(reply)
             if self.agent is not None and owner_id is not None and update_id is not None:
-                outcome = await self.agent.answer(owner_id, update_id, messages, state.temperature)
+                if self.agent.specialist_router is not None and state.mode in {"translate", "quiz"}:
+                    outcome = await self.agent.answer(
+                        owner_id,
+                        update_id,
+                        messages,
+                        state.temperature,
+                        component_override="dialogue",
+                    )
+                else:
+                    outcome = await self.agent.answer(
+                        owner_id, update_id, messages, state.temperature
+                    )
             else:
                 outcome = await self._plain_answer(messages, state.temperature)
             if outcome.replayed:

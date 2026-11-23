@@ -152,6 +152,15 @@ class PostgresStore:
             "SELECT timezone FROM chat_settings WHERE chat_id = $1", owner_id
         )
 
+    async def get_confirmed_city(self, owner_id: int):
+        """Return only the city confirmed by this user, never a pending proposal."""
+        return await self.pool.fetchrow(
+            "SELECT city_name, city_country, city_region, latitude, longitude "
+            "FROM notification_settings WHERE owner_id = $1 AND city_name IS NOT NULL "
+            "AND city_country IS NOT NULL AND latitude IS NOT NULL AND longitude IS NOT NULL",
+            owner_id,
+        )
+
     async def set_timezone(self, owner_id: int, zone: str) -> None:
         get_user_zone(zone)
         await self.pool.execute(

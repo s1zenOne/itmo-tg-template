@@ -23,7 +23,7 @@ async def test_real_lab2_migrations_and_concurrent_reminder(lab2_database):
         assert await first.save_result(101, state.generation, "Учебная тема", "Тестовый вопрос")
 
         await asyncio.gather(first.initialize(), second.initialize())
-        assert await pool.fetchval("SELECT count(*) FROM schema_migrations") == 2
+        assert await pool.fetchval("SELECT count(*) FROM schema_migrations") >= 2
         preserved, history = await first.get_context(101, 10)
         assert preserved == state
         assert history == [

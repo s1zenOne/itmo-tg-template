@@ -8,14 +8,17 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from mcp.types import Tool
+from pydantic import ValidationError
 
 from app.config import DEFAULT_SCHEDULE_TIMEZONE
 from app.llm import LLMResult, OpenRouterChatClient
 from app.mcp_tools.contracts import (
     INPUTS,
     REMINDER,
+    WEATHER,
     LocalReminderInput,
     ToolError,
+    WeatherInput,
     validate_arguments,
 )
 from app.reminders import ReminderError, normalize_reminder_time, reminder_display_time
@@ -127,6 +130,9 @@ def _native_schemas(
             schema = {**schema, "properties": {**schema["properties"], "remind_at": time_schema}}
             if instruction_variant == ACTIVE_VARIANT:
                 description = _REMINDER_DESCRIPTION
+        elif tool.name == WEATHER:
+            # Only trusted code can select coordinates; models see the city-only contract.
+            schema = WeatherInput.model_json_schema()
         schemas.append(_function(tool.name, description, schema))
     schemas.append(
         _function(
@@ -282,6 +288,8 @@ class AgentRouter:
                 "unknown_tool", "Модель предложила недоступное действие.", result=result
             )
         try:
+            if call.name == WEATHER:
+                args = WeatherInput.model_validate(args).model_dump()
             arguments = validate_arguments(call.name, args, allow_local_reminder=True)
             timezone = None
             if call.name == REMINDER:
@@ -289,6 +297,10 @@ class AgentRouter:
                     arguments["remind_at"], query, context
                 )
                 arguments = validate_arguments(call.name, arguments)
+        except ValidationError:
+            raise RoutingError(
+                "invalid_arguments", INVALID_ARGUMENTS, name=call.name, result=result
+            ) from None
         except (ToolError, ReminderError) as exc:
             raise RoutingError(
                 exc.code,

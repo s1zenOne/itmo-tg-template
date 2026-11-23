@@ -22,6 +22,8 @@ WEATHER = "get_weather"
 SCHEDULE = "get_schedule"
 REMINDER = "add_reminder"
 WEEK_URI = "schedule://current-week"
+MATERIALS = "search_materials"
+CATALOG_URI = "materials://catalog"
 WEATHER_SOURCE = "Open-Meteo"
 SCHEDULE_SOURCE = "Учебное расписание"
 
@@ -66,6 +68,22 @@ class WeatherInput(Contract):
         return value
 
 
+class WeatherToolInput(WeatherInput):
+    country: ShortLabel | None = None
+    region: ShortLabel | None = None
+    latitude: Annotated[FiniteFloat, Field(ge=-90, le=90)] | None = None
+    longitude: Annotated[FiniteFloat, Field(ge=-180, le=180)] | None = None
+
+    @model_validator(mode="after")
+    def validate_location(self) -> "WeatherToolInput":
+        if self.latitude is None and self.longitude is None:
+            if self.country is not None or self.region is not None:
+                raise ValueError("Location metadata requires coordinates.")
+        elif self.latitude is None or self.longitude is None or self.country is None:
+            raise ValueError("Coordinates and country must be supplied together.")
+        return self
+
+
 class CalendarDate(Contract):
     date: DateText
 
@@ -80,6 +98,31 @@ class ScheduleInput(CalendarDate):
     date: Annotated[str, StringConstraints(pattern=SCHEDULE_INPUT_PATTERN)] = Field(
         description="Точная дата YYYY-MM-DD в диапазоне 2000–2099 годов."
     )
+
+
+class MaterialsInput(Contract):
+    query: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=300)]
+    limit: Annotated[int, Field(ge=1, le=5)] = 5
+
+
+class MaterialEntry(Contract):
+    id: Annotated[str, StringConstraints(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")]
+    title: ShortLabel
+    text: Annotated[str, StringConstraints(min_length=1, max_length=4000)]
+
+
+class MaterialsResult(Contract):
+    status: Literal["ok"]
+    documents: Annotated[list[MaterialEntry], Field(max_length=5)]
+
+
+class CatalogEntry(Contract):
+    id: Annotated[str, StringConstraints(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")]
+    title: ShortLabel
+
+
+class MaterialsCatalog(Contract):
+    documents: Annotated[list[CatalogEntry], Field(max_length=50)]
 
 
 class LocalReminderInput(Contract):
@@ -108,7 +151,7 @@ class Place(Contract):
     region: ShortLabel | None
 
 
-class WeatherResult(Place):
+class CoordinateWeatherResult(Contract):
     status: Literal["ok"]
     temperature_c: FiniteFloat
     conditions: ShortLabel
@@ -129,6 +172,10 @@ class WeatherResult(Place):
             except ZoneInfoNotFoundError as exc:
                 raise ValueError("Неизвестная зона наблюдения.") from exc
         return value
+
+
+class WeatherResult(CoordinateWeatherResult, Place):
+    pass
 
 
 class AmbiguousWeatherResult(Contract):
@@ -186,7 +233,12 @@ class ErrorResult(Contract):
     code: Annotated[str, StringConstraints(pattern=r"^[a-z_]{2,40}$")]
 
 
-INPUTS = {WEATHER: WeatherInput, SCHEDULE: ScheduleInput, REMINDER: ReminderInput}
+INPUTS = {
+    WEATHER: WeatherToolInput,
+    SCHEDULE: ScheduleInput,
+    REMINDER: ReminderInput,
+    MATERIALS: MaterialsInput,
+}
 OUTPUTS = {
     WEATHER: TypeAdapter(
         Annotated[
@@ -195,11 +247,13 @@ OUTPUTS = {
     ),
     SCHEDULE: TypeAdapter(Annotated[ScheduleResult | ErrorResult, Field(discriminator="status")]),
     REMINDER: TypeAdapter(Annotated[ReminderResult | ErrorResult, Field(discriminator="status")]),
+    MATERIALS: TypeAdapter(Annotated[MaterialsResult | ErrorResult, Field(discriminator="status")]),
 }
 DESCRIPTIONS = {
     WEATHER: "Получает текущую погоду в указанном городе из Open-Meteo.",
     SCHEDULE: "Получает занятия из учебного расписания на одну точную дату.",
     REMINDER: "Создаёт напоминание после подтверждения пользователем.",
+    MATERIALS: "Ищет фрагменты в обезличенных учебных материалах.",
 }
 
 
@@ -226,7 +280,7 @@ def validate_arguments(name: str, arguments: object, *, allow_local_reminder: bo
         raise ToolError("unknown_tool")
     model = LocalReminderInput if name == REMINDER and allow_local_reminder else INPUTS[name]
     try:
-        return model.model_validate(arguments).model_dump()
+        return model.model_validate(arguments).model_dump(exclude_none=name == WEATHER)
     except ValidationError:
         raise ToolError("invalid_arguments") from None
 
