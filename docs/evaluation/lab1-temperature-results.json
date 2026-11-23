@@ -1,0 +1,258 @@
+{
+  "description": "Обезличенные измерения эксперимента лабораторной № 1. Полные ответы, инструкции и идентификаторы запросов исключены.",
+  "started_at_utc": "2026-11-10T15:29:29.747360+00:00",
+  "completed_at_utc": "2026-11-10T15:35:19.727796+00:00",
+  "api": "OpenRouter Chat Completions",
+  "api_version": "/api/v1",
+  "model": "nvidia/nemotron-3.5-lightning:free",
+  "endpoint_requested": "nvidia/nvfp4",
+  "provider_expected": "Nvidia",
+  "preflight": [
+    {
+      "temperature": 0.0,
+      "completed_at_utc": "2026-11-10T15:29:44.769908+00:00",
+      "usage": {
+        "prompt_tokens": 55,
+        "completion_tokens": 1205,
+        "total_tokens": 1260
+      }
+    },
+    {
+      "temperature": 0.3,
+      "completed_at_utc": "2026-11-10T15:30:06.031947+00:00",
+      "usage": {
+        "prompt_tokens": 55,
+        "completion_tokens": 1488,
+        "total_tokens": 1543
+      }
+    },
+    {
+      "temperature": 0.7,
+      "completed_at_utc": "2026-11-10T15:30:20.053807+00:00",
+      "usage": {
+        "prompt_tokens": 55,
+        "completion_tokens": 736,
+        "total_tokens": 791
+      }
+    },
+    {
+      "temperature": 1.0,
+      "completed_at_utc": "2026-11-10T15:31:17.307911+00:00",
+      "usage": {
+        "prompt_tokens": 55,
+        "completion_tokens": 2152,
+        "total_tokens": 2207
+      }
+    }
+  ],
+  "runs": [
+    {
+      "number": 1,
+      "temperature": 0.0,
+      "repeat": 1,
+      "completed_at_utc": "2026-11-10T15:31:33.466746+00:00",
+      "length_chars": 1389,
+      "format_ok": true,
+      "model": "nvidia/nemotron-3.5-lightning:free",
+      "provider": "Nvidia",
+      "usage": {
+        "prompt_tokens": 170,
+        "completion_tokens": 1221,
+        "total_tokens": 1391
+      }
+    },
+    {
+      "number": 2,
+      "temperature": 0.0,
+      "repeat": 2,
+      "completed_at_utc": "2026-11-10T15:31:50.684093+00:00",
+      "length_chars": 1295,
+      "format_ok": true,
+      "model": "nvidia/nemotron-3.5-lightning:free",
+      "provider": "Nvidia",
+      "usage": {
+        "prompt_tokens": 170,
+        "completion_tokens": 1119,
+        "total_tokens": 1289
+      }
+    },
+    {
+      "number": 3,
+      "temperature": 0.0,
+      "repeat": 3,
+      "completed_at_utc": "2026-11-10T15:32:14.446305+00:00",
+      "length_chars": 1339,
+      "format_ok": true,
+      "model": "nvidia/nemotron-3.5-lightning:free",
+      "provider": "Nvidia",
+      "usage": {
+        "prompt_tokens": 170,
+        "completion_tokens": 1716,
+        "total_tokens": 1886
+      }
+    },
+    {
+      "number": 4,
+      "temperature": 0.3,
+      "repeat": 1,
+      "completed_at_utc": "2026-11-10T15:32:38.732932+00:00",
+      "length_chars": 1129,
+      "format_ok": true,
+      "model": "nvidia/nemotron-3.5-lightning:free",
+      "provider": "Nvidia",
+      "usage": {
+        "prompt_tokens": 170,
+        "completion_tokens": 1453,
+        "total_tokens": 1623
+      }
+    },
+    {
+      "number": 5,
+      "temperature": 0.3,
+      "repeat": 2,
+      "completed_at_utc": "2026-11-10T15:32:53.343486+00:00",
+      "length_chars": 1215,
+      "format_ok": true,
+      "model": "nvidia/nemotron-3.5-lightning:free",
+      "provider": "Nvidia",
+      "usage": {
+        "prompt_tokens": 170,
+        "completion_tokens": 1185,
+        "total_tokens": 1355
+      }
+    },
+    {
+      "number": 6,
+      "temperature": 0.3,
+      "repeat": 3,
+      "completed_at_utc": "2026-11-10T15:33:05.930176+00:00",
+      "length_chars": 1225,
+      "format_ok": true,
+      "model": "nvidia/nemotron-3.5-lightning:free",
+      "provider": "Nvidia",
+      "usage": {
+        "prompt_tokens": 170,
+        "completion_tokens": 1185,
+        "total_tokens": 1355
+      }
+    },
+    {
+      "number": 7,
+      "temperature": 0.7,
+      "repeat": 1,
+      "completed_at_utc": "2026-11-10T15:33:22.211848+00:00",
+      "length_chars": 1173,
+      "format_ok": true,
+      "model": "nvidia/nemotron-3.5-lightning:free",
+      "provider": "Nvidia",
+      "usage": {
+        "prompt_tokens": 170,
+        "completion_tokens": 1156,
+        "total_tokens": 1326
+      }
+    },
+    {
+      "number": 8,
+      "temperature": 0.7,
+      "repeat": 2,
+      "completed_at_utc": "2026-11-10T15:33:34.795168+00:00",
+      "length_chars": 1257,
+      "format_ok": true,
+      "model": "nvidia/nemotron-3.5-lightning:free",
+      "provider": "Nvidia",
+      "usage": {
+        "prompt_tokens": 170,
+        "completion_tokens": 1190,
+        "total_tokens": 1360
+      }
+    },
+    {
+      "number": 9,
+      "temperature": 0.7,
+      "repeat": 3,
+      "completed_at_utc": "2026-11-10T15:33:53.009768+00:00",
+      "length_chars": 1136,
+      "format_ok": true,
+      "model": "nvidia/nemotron-3.5-lightning:free",
+      "provider": "Nvidia",
+      "usage": {
+        "prompt_tokens": 170,
+        "completion_tokens": 1657,
+        "total_tokens": 1827
+      }
+    },
+    {
+      "number": 10,
+      "temperature": 1.0,
+      "repeat": 1,
+      "completed_at_utc": "2026-11-10T15:34:06.971247+00:00",
+      "length_chars": 1050,
+      "format_ok": true,
+      "model": "nvidia/nemotron-3.5-lightning:free",
+      "provider": "Nvidia",
+      "usage": {
+        "prompt_tokens": 170,
+        "completion_tokens": 1122,
+        "total_tokens": 1292
+      }
+    },
+    {
+      "number": 11,
+      "temperature": 1.0,
+      "repeat": 2,
+      "completed_at_utc": "2026-11-10T15:34:20.351457+00:00",
+      "length_chars": 1150,
+      "format_ok": true,
+      "model": "nvidia/nemotron-3.5-lightning:free",
+      "provider": "Nvidia",
+      "usage": {
+        "prompt_tokens": 170,
+        "completion_tokens": 1128,
+        "total_tokens": 1298
+      }
+    },
+    {
+      "number": 12,
+      "temperature": 1.0,
+      "repeat": 3,
+      "completed_at_utc": "2026-11-10T15:34:46.089832+00:00",
+      "length_chars": 1166,
+      "format_ok": true,
+      "model": "nvidia/nemotron-3.5-lightning:free",
+      "provider": "Nvidia",
+      "usage": {
+        "prompt_tokens": 170,
+        "completion_tokens": 1702,
+        "total_tokens": 1872
+      }
+    }
+  ],
+  "comparison": [
+    {
+      "instruction_variant": "неполная",
+      "temperature": 0.3,
+      "completed_at_utc": "2026-11-10T15:34:58.514105+00:00",
+      "length_chars": 1912,
+      "model": "nvidia/nemotron-3.5-lightning:free",
+      "provider": "Nvidia",
+      "usage": {
+        "prompt_tokens": 64,
+        "completion_tokens": 1046,
+        "total_tokens": 1110
+      }
+    },
+    {
+      "instruction_variant": "улучшенная",
+      "temperature": 0.3,
+      "completed_at_utc": "2026-11-10T15:35:19.725403+00:00",
+      "length_chars": 1770,
+      "model": "nvidia/nemotron-3.5-lightning:free",
+      "provider": "Nvidia",
+      "usage": {
+        "prompt_tokens": 165,
+        "completion_tokens": 1623,
+        "total_tokens": 1788
+      }
+    }
+  ]
+}
