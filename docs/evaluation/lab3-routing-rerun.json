@@ -1,0 +1,54 @@
+{
+  "kind": "lab3_routing",
+  "pinned_model": "nvidia/nemotron-3.5-lightning:free",
+  "pinned_endpoint": "nvidia/nvfp4",
+  "temperature": 0.0,
+  "cases": [
+    {
+      "id": "clarify_2",
+      "query": "Сделай что-нибудь полезное.",
+      "expected_target": "clarify",
+      "actual_target": "clarify",
+      "confidence": 0.9,
+      "tools_called": [],
+      "resources_read": [],
+      "duration_ms": 1408,
+      "model_metadata": [
+        {
+          "model": "nvidia/nemotron-3.5-lightning:free",
+          "version": "nvidia/nemotron-3.5-lightning-20260807:free",
+          "endpoint": null,
+          "usage": {
+            "prompt_tokens": 515,
+            "completion_tokens": 202,
+            "total_tokens": 717
+          }
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "clarify_3",
+      "query": "Расскажи, что для меня важно сегодня.",
+      "expected_target": "clarify",
+      "actual_target": "clarify",
+      "confidence": 0.9,
+      "tools_called": [],
+      "resources_read": [],
+      "duration_ms": 1631,
+      "model_metadata": [
+        {
+          "model": "nvidia/nemotron-3.5-lightning:free",
+          "version": "nvidia/nemotron-3.5-lightning-20260807:free",
+          "endpoint": null,
+          "usage": {
+            "prompt_tokens": 518,
+            "completion_tokens": 290,
+            "total_tokens": 808
+          }
+        }
+      ],
+      "error": null
+    }
+  ]
+}
