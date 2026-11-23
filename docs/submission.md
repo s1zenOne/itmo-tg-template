@@ -1,13 +1,13 @@
 # Материалы для сдачи лабораторных работ
 
-Отчёты подготовлены в Markdown. Если преподаватель требует другой формат или собственный шаблон, используйте его. Перед сдачей заполните в каждом отчёте имя студента и учебную группу; в лабораторной № 3 титульные поля также оставлены для заполнения.
+Отчёты и результаты экспериментов находятся в соответствующих метках кода:
 
-| Работа | Отчёт и результаты | Исходная метка кода | Дополнение с обновлённым отчётом |
-| --- | --- | --- | --- |
-| № 1 | [Отчёт](lab1-report.md), [обезличенные измерения 12 прогонов и сравнения инструкций](evaluation/lab1-temperature-results.json) | `lab1` не создан: полная демонстрация ещё не выполнена | [`lab1-evidence-20261124`](https://github.com/s1zenOne/itmo-tg-template/tree/lab1-evidence-20261124) |
-| № 2 | [Отчёт](lab2-report.md), [результаты эксперимента и ссылки на исходную серию, повтор и итог](evaluation/lab2-routing-results.md) | [`lab2`](https://github.com/s1zenOne/itmo-tg-template/tree/lab2) | [`lab2-evidence-20261124`](https://github.com/s1zenOne/itmo-tg-template/tree/lab2-evidence-20261124) |
-| № 3 | [Отчёт](lab3-report.md), [исходная серия](evaluation/lab3-routing-baseline.json), [повтор](evaluation/lab3-routing-rerun.json), [итоговая серия](evaluation/lab3-routing-final.json) | [`lab3`](https://github.com/s1zenOne/itmo-tg-template/tree/lab3) | [`lab3-evidence-20261124`](https://github.com/s1zenOne/itmo-tg-template/tree/lab3-evidence-20261124) |
+| Работа | Сдаваемая метка | Отчёт и результаты |
+| --- | --- | --- |
+| № 1 | [`lab1`](https://github.com/s1zenOne/itmo-tg-template/tree/lab1) | [Отчёт](https://github.com/s1zenOne/itmo-tg-template/blob/lab1/docs/lab1-report.md), [обезличенные измерения](https://github.com/s1zenOne/itmo-tg-template/blob/lab1/docs/evaluation/lab1-temperature-results.json) |
+| № 2 | [`lab2`](https://github.com/s1zenOne/itmo-tg-template/tree/lab2) | [Отчёт](https://github.com/s1zenOne/itmo-tg-template/blob/lab2/docs/lab2-report.md), [результаты эксперимента](https://github.com/s1zenOne/itmo-tg-template/blob/lab2/docs/evaluation/lab2-routing-results.md) |
+| № 3 | [`lab3`](https://github.com/s1zenOne/itmo-tg-template/tree/lab3) | [Отчёт](https://github.com/s1zenOne/itmo-tg-template/blob/lab3/docs/lab3-report.md), [исходная серия](https://github.com/s1zenOne/itmo-tg-template/blob/lab3/docs/evaluation/lab3-routing-baseline.json), [повтор](https://github.com/s1zenOne/itmo-tg-template/blob/lab3/docs/evaluation/lab3-routing-rerun.json), [итоговая серия](https://github.com/s1zenOne/itmo-tg-template/blob/lab3/docs/evaluation/lab3-routing-final.json) |
 
-Дополнительные метки сохраняют исходный код соответствующей работы и включают обновлённые отчёты. Они не переназначают исходные `lab2` и `lab3` и не подтверждают автоматически полное выполнение лабораторной № 1. Живые проверки 24 ноября 2026 года проводились на версии после лабораторной № 3; для проверки напоминания применена подмена решения модели, поскольку бот сообщил об исчерпании бесплатного лимита OpenRouter. Подробности и ограничения приведены в отчётах.
+Проверка `RUN_LAB1_SUBMISSION_DEMO=1 .venv/bin/python -m pytest -q tests/test_lab1_submission_demo.py` воспроизводит два учебных аккаунта на временной PostgreSQL, восстановление состояния сервисов, изоляцию `/reset`, таймаут и разбиение длинного ответа. Она прошла на коде каждой из трёх работ. Telegram и LLM подменены; на версии № 2 проверяется базовый сервис без агента. Это не живая демонстрация двух реальных аккаунтов и действительной модели.
 
-Для полной демонстрации ещё нужны два аккаунта Telegram с проверкой изоляции настроек и истории до и после перезапуска, а также показ длинного ответа. Подготовьте конфигурацию и не передавайте токены, пароли, полные личные диалоги или локальные базы данных преподавателю. Результаты автоматических проверок и проведённых экспериментов зафиксированы в отчётах.
+В Telegram дополнительно проверены работа с городом, погода и сводка. Для создания тестового напоминания применена подмена решения модели после сообщения об исчерпании бесплатного лимита OpenRouter. Фактические результаты и ограничения каждого испытания приведены в отчётах. Не включайте в сдаваемые материалы токены, пароли, полные личные диалоги или локальные базы данных.
