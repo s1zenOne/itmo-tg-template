@@ -487,3 +487,158 @@ async def test_lab3_tool_result_instructions_do_not_trigger_a_write():
     await agent.answer(101, 1, messages("Расписание на сегодня"), 0.3)
     agent.mcp.call.assert_awaited_once_with(SCHEDULE, {"date": "2026-10-12"})
     agent.store.prepare_reminder.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    ("task", "timestamp"),
+    [
+        ("лабораторную", "2026-10-13T17:00"),
+        ("отправить лабораторную преподавателю Петрову", "2026-10-13T17:00"),
+        ("отправить лабораторную преподавателю Иванову", "2026-10-13T18:00"),
+    ],
+)
+async def test_lab3_rejects_partial_or_substituted_reminder_before_preparation(task, timestamp):
+    from app.supervisor import SpecialistRouter
+
+    route = call("select_route", {"target": "schedule", "reason": "reminder", "confidence": 0.9})
+    agent = agent_fixture(route, call(REMINDER, {"text": task, "remind_at": timestamp}))
+    agent.specialist_router = SpecialistRouter(agent.router.llm)
+    response = await agent.answer(
+        101,
+        71,
+        messages("Напомни завтра в 17 отправить лабораторную преподавателю Иванову"),
+        0.3,
+    )
+    assert "Уточните" in response.text
+    agent.store.prepare_reminder.assert_not_awaited()
+    agent.store.confirm_reminder.assert_not_awaited()
+    agent.mcp.call.assert_not_awaited()
+
+
+async def test_lab3_full_reminder_is_prepared_for_confirmation_with_trusted_owner():
+    from app.supervisor import SpecialistRouter
+
+    task = "отправить лабораторную преподавателю Иванову"
+    route = call("select_route", {"target": "schedule", "reason": "reminder", "confidence": 0.9})
+    agent = agent_fixture(route, call(REMINDER, {"text": task, "remind_at": "2026-10-13T17:00"}))
+    agent.specialist_router = SpecialistRouter(agent.router.llm)
+    agent.store.prepare_reminder.return_value = PreparedReminder(
+        ACTION,
+        task,
+        datetime(2026, 10, 13, 14, tzinfo=UTC),
+        TIMEZONE,
+        datetime(2026, 10, 12, 6, 5, tzinfo=UTC),
+        "pending",
+    )
+    response = await agent.answer(101, 71, messages(f"Напомни завтра в 17 {task}"), 0.3)
+    assert task in response.text
+    agent.store.prepare_reminder.assert_awaited_once_with(
+        101, 71, task, datetime(2026, 10, 13, 14, tzinfo=UTC), TIMEZONE
+    )
+    agent.store.confirm_reminder.assert_not_awaited()
+    agent.mcp.call.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    ("query", "task", "proposed", "instant"),
+    [
+        (
+            "Напомни завтра в 18:30 отправить отчёт.",
+            "отправить отчёт",
+            "2026-10-13T18:30",
+            datetime(2026, 10, 13, 15, 30, tzinfo=UTC),
+        ),
+        (
+            "Напомни 15 октября в 09:00 проверить расписание.",
+            "проверить расписание",
+            "2026-10-15T09:00",
+            datetime(2026, 10, 15, 6, tzinfo=UTC),
+        ),
+        (
+            "Через два часа напомни сделать перерыв.",
+            "сделать перерыв",
+            "2026-10-12T11:00",
+            datetime(2026, 10, 12, 8, tzinfo=UTC),
+        ),
+    ],
+)
+async def test_lab3_reminder_evaluation_phrases_prepare_exact_intent(
+    query, task, proposed, instant
+):
+    from app.supervisor import SpecialistRouter
+
+    route = call("select_route", {"target": "schedule", "reason": "reminder", "confidence": 0.9})
+    agent = agent_fixture(route, call(REMINDER, {"text": task, "remind_at": proposed}))
+    agent.specialist_router = SpecialistRouter(agent.router.llm)
+    original_task = task + "."
+    agent.store.prepare_reminder.return_value = PreparedReminder(
+        ACTION,
+        original_task,
+        instant,
+        TIMEZONE,
+        datetime(2026, 10, 12, 6, 5, tzinfo=UTC),
+        "pending",
+    )
+    response = await agent.answer(101, 71, messages(query), 0.3)
+    assert original_task in response.text
+    agent.store.prepare_reminder.assert_awaited_once_with(101, 71, original_task, instant, TIMEZONE)
+    agent.store.confirm_reminder.assert_not_awaited()
+    agent.mcp.call.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    ("original_task", "model_task"),
+    [("вычислить 5!", "вычислить 5"), ("открыть файл report.", "открыть файл report")],
+)
+async def test_lab3_original_task_punctuation_survives_prepare_replay_and_confirmation(
+    original_task, model_task
+):
+    from app.supervisor import SpecialistRouter
+
+    route = call("select_route", {"target": "schedule", "reason": "reminder", "confidence": 0.9})
+    agent = agent_fixture(
+        route, call(REMINDER, {"text": model_task, "remind_at": "2026-10-13T17:00"})
+    )
+    agent.specialist_router = SpecialistRouter(agent.router.llm)
+    instant = datetime(2026, 10, 13, 14, tzinfo=UTC)
+    action = PreparedReminder(
+        ACTION,
+        original_task,
+        instant,
+        TIMEZONE,
+        datetime(2026, 10, 12, 6, 5, tzinfo=UTC),
+        "pending",
+    )
+    agent.store.prepare_reminder.return_value = action
+    query = messages(f"Напомни завтра в 17 {original_task}")
+    first = await agent.answer(101, 71, query, 0.3)
+    assert f"«{original_task}»" in first.text
+    assert first.confirmation == ACTION
+    agent.store.prepare_reminder.assert_awaited_once_with(101, 71, original_task, instant, TIMEZONE)
+    agent.mcp.call.assert_not_awaited()
+
+    agent.store.reminder_for_update.return_value = action
+    repeated = await agent.answer(101, 71, query, 0.3)
+    assert repeated.text == first.text
+    assert repeated.confirmation == ACTION
+    assert repeated.replayed
+    agent.store.prepare_reminder.assert_awaited_once()
+    assert agent.router.llm.generate.await_count == 2
+
+    agent.store.confirm_reminder.return_value = action
+    agent.mcp.call.return_value = {
+        "status": "ok",
+        "id": 7,
+        "remind_at": instant.isoformat(),
+        "timezone": TIMEZONE,
+        "created": True,
+    }
+    result = await agent.confirm(101, ACTION, accepted=True)
+    assert "сохранено" in result.text
+    agent.store.confirm_reminder.assert_awaited_once_with(101, ACTION)
+    agent.mcp.call.assert_awaited_once_with(
+        REMINDER,
+        {"text": original_task, "remind_at": instant.isoformat()},
+        owner_id=101,
+        action_id=ACTION,
+    )

@@ -36,7 +36,7 @@ from app.mcp_tools.contracts import (
     validate_result,
 )
 from app.mcp_tools.weather import CONDITIONS
-from app.reminder_intent import matches_reminder_request
+from app.reminder_intent import verified_reminder_text
 from app.reminders import PreparedReminder, ReminderError, get_user_zone, reminder_display_time
 from app.store import AuditDecision, PostgresStore
 from app.supervisor import (
@@ -859,16 +859,21 @@ class AgentService:
                         error_code="unauthorized",
                     )
                 original = next(m["content"] for m in reversed(messages) if m["role"] == "user")
-                if last_tool == REMINDER and not matches_reminder_request(
-                    original,
-                    decision.arguments["text"],
-                    decision.arguments["remind_at"],
-                    context.now,
-                    decision.timezone or "UTC",
-                ):
-                    return failed(
-                        "Уточните текст и точные дату и время напоминания.",
-                        "Напоминание не соответствует исходному запросу.",
+                if last_tool == REMINDER:
+                    original_task = verified_reminder_text(
+                        original,
+                        decision.arguments["text"],
+                        decision.arguments["remind_at"],
+                        context.now,
+                        decision.timezone or "UTC",
+                    )
+                    if original_task is None:
+                        return failed(
+                            "Уточните текст и точные дату и время напоминания.",
+                            "Напоминание не соответствует исходному запросу.",
+                        )
+                    decision = replace(
+                        decision, arguments={**decision.arguments, "text": original_task}
                     )
             summary = _arguments(last_tool, decision.arguments)
             if not self.mcp.available:

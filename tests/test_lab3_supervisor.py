@@ -165,3 +165,207 @@ def test_reminder_accepts_explicit_utc_offset():
         datetime(2026, 10, 12, 6, tzinfo=UTC),
         "UTC+03:00",
     )
+
+
+@pytest.mark.parametrize(
+    "query,text,proposed,expected",
+    [
+        (
+            "Напомни завтра в 17:00 отправить лабораторную преподавателю Иванову",
+            "лабораторную",
+            "2026-10-13T17:00:00+00:00",
+            False,
+        ),
+        (
+            "Напомни завтра в 17:00 отправить лабораторную преподавателю Иванову",
+            "отправить лабораторную преподавателю Иванову",
+            "2026-10-13T17:00:00+00:00",
+            True,
+        ),
+        (
+            "Напомни завтра в 17 отправить отчёт.",
+            "отправить отчёт",
+            "2026-10-13T17:00:00+00:00",
+            True,
+        ),
+        (
+            "Напомни завтра в 17 отправить отчёт",
+            "отправить отчёт",
+            "2026-10-13T17:30:00+00:00",
+            False,
+        ),
+        (
+            "Напомни 15 октября в 09:00 проверить расписание.",
+            "проверить расписание",
+            "2026-10-15T09:00:00+00:00",
+            True,
+        ),
+        (
+            "Через два часа напомни сделать перерыв.",
+            "сделать перерыв",
+            "2026-10-12T08:00:00+00:00",
+            True,
+        ),
+        (
+            "Через два часа напомни сделать перерыв.",
+            "сделать перерыв",
+            "2026-10-12T09:00:00+00:00",
+            False,
+        ),
+        (
+            "Напомни через 30 минут отправить отчёт",
+            "отправить отчёт",
+            "2026-10-12T06:30:00+00:00",
+            True,
+        ),
+        (
+            "Напомни завтра в 17 отправить отчёт, а потом завтра позвонить",
+            "отправить отчёт, а потом завтра позвонить",
+            "2026-10-13T17:00:00+00:00",
+            False,
+        ),
+        (
+            "Напомни 11 октября в 17:00 отправить отчёт",
+            "отправить отчёт",
+            "2027-10-11T17:00:00+00:00",
+            False,
+        ),
+        (
+            "Напомни вечером отправить отчёт",
+            "отправить отчёт",
+            "2026-10-12T18:00:00+00:00",
+            False,
+        ),
+        (
+            "Напомни завтра в 17:00 отправить отчёт Иванову",
+            "отправить отчёт Петрову",
+            "2026-10-13T17:00:00+00:00",
+            False,
+        ),
+    ],
+)
+def test_reminder_task_and_unambiguous_time_are_verified(query, text, proposed, expected):
+    from app.reminder_intent import matches_reminder_request
+
+    assert (
+        matches_reminder_request(
+            query, text, proposed, datetime(2026, 10, 12, 6, tzinfo=UTC), "UTC"
+        )
+        is expected
+    )
+
+
+def test_relative_reminder_uses_elapsed_time_across_dst_transition():
+    from app.reminder_intent import matches_reminder_request
+
+    assert matches_reminder_request(
+        "Через два часа напомни сделать перерыв",
+        "сделать перерыв",
+        "2026-03-08T08:30:00+00:00",
+        datetime(2026, 3, 8, 6, 30, tzinfo=UTC),
+        "America/New_York",
+    )
+
+
+@pytest.mark.parametrize(
+    "query,text,instant,zone,expected",
+    [
+        (
+            "Напомни 2026-10-13 в 17:00 UTC+03:00 отправить отчёт",
+            "отправить отчёт",
+            "2026-10-13T14:00:00+00:00",
+            "UTC+03:00",
+            True,
+        ),
+        (
+            "Напомни 2026-10-13 в 17:00 UTC+03:00 отправить отчёт",
+            "отправить отчёт",
+            "2026-10-13T17:00:00+00:00",
+            "UTC",
+            False,
+        ),
+        (
+            "Напомни завтра в 17 отправить отчёт в 18",
+            "отправить отчёт в 18",
+            "2026-10-13T17:00:00+00:00",
+            "UTC",
+            False,
+        ),
+        (
+            "Напомни завтра в 17 отправить отчёт вечером",
+            "отправить отчёт вечером",
+            "2026-10-13T17:00:00+00:00",
+            "UTC",
+            False,
+        ),
+        (
+            "Напомни завтра в 17 отправить отчёт",
+            "отправить отчёт",
+            "2026-10-13T17:00:30+00:00",
+            "UTC",
+            False,
+        ),
+    ],
+)
+def test_reminder_explicit_offset_and_ambiguous_times(query, text, instant, zone, expected):
+    from app.reminder_intent import matches_reminder_request
+
+    assert (
+        matches_reminder_request(query, text, instant, datetime(2026, 10, 12, 6, tzinfo=UTC), zone)
+        is expected
+    )
+
+
+def test_relative_reminder_limits_rounding_to_the_expected_minute():
+    from app.reminder_intent import matches_reminder_request
+
+    now = datetime(2026, 10, 12, 6, 0, 42, tzinfo=UTC)
+    args = ("Через два часа напомни сделать перерыв", "сделать перерыв")
+    assert matches_reminder_request(*args, "2026-10-12T08:00:42+00:00", now, "UTC")
+    assert matches_reminder_request(*args, "2026-10-12T08:00:00+00:00", now, "UTC")
+    assert not matches_reminder_request(*args, "2026-10-12T08:01:00+00:00", now, "UTC")
+
+
+def test_same_weekday_requires_clarification():
+    from app.reminder_intent import matches_reminder_request
+
+    assert not matches_reminder_request(
+        "Напомни понедельник в 17 отправить отчёт",
+        "отправить отчёт",
+        "2026-10-19T17:00:00+00:00",
+        datetime(2026, 10, 12, 6, tzinfo=UTC),
+        "UTC",
+    )
+
+
+@pytest.mark.parametrize(
+    "proposal,expected",
+    [
+        ("отправить файл Report.PDF", True),
+        ("отправить файл report.pdf", False),
+        ("отправить файл Report.PDF другому адресату", False),
+    ],
+)
+def test_reminder_preserves_case_sensitive_task(proposal, expected):
+    from app.reminder_intent import matches_reminder_request
+
+    assert (
+        matches_reminder_request(
+            "НАПОМНИ ЗАВТРА в 17 отправить файл Report.PDF",
+            proposal,
+            "2026-10-13T17:00:00+00:00",
+            datetime(2026, 10, 12, 6, tzinfo=UTC),
+            "UTC",
+        )
+        is expected
+    )
+
+
+def test_reminder_preserves_significant_whitespace_in_task():
+    from app.reminder_intent import matches_reminder_request
+
+    args = ("Напомни завтра в 17 открыть файл A  B",)
+    timestamp = "2026-10-13T17:00:00+00:00"
+    now = datetime(2026, 10, 12, 6, tzinfo=UTC)
+    assert matches_reminder_request(*args, "открыть файл A  B", timestamp, now, "UTC")
+    assert not matches_reminder_request(*args, "открыть файл A B", timestamp, now, "UTC")
