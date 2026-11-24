@@ -12,7 +12,7 @@ from app.agent import AgentService
 from app.agent_router import AgentRouter
 from app.config import Settings
 from app.llm import OpenRouterChatClient
-from app.mcp_tools.client import MCPClient
+from app.mcp_tools.client import MCPClient, observe_tool_dispatch
 from app.reminders import PreparedReminder
 from app.supervisor import SpecialistRouter
 
@@ -61,23 +61,54 @@ class PinnedLLM:
         self.responses.append(result)
         return result
 
+    @property
+    def tool_proposals(self):
+        return [call.name for response in self.responses for call in response.tool_calls]
+
 
 class ObservedMCP:
     def __init__(self, inner):
         self.inner = inner
-        self.tools_called = []
-        self.resources_read = []
+        self.tool_attempts = []
+        self.resource_attempts = []
 
     def __getattr__(self, name):
         return getattr(self.inner, name)
 
     async def call(self, name, arguments, **kwargs):
-        self.tools_called.append(name)
-        return await self.inner.call(name, arguments, **kwargs)
+        attempt = {"name": name, "sdk_dispatch": False, "outcome": "pending"}
+        self.tool_attempts.append(attempt)
+
+        def dispatched(_name):
+            attempt["sdk_dispatch"] = True
+
+        try:
+            with observe_tool_dispatch(dispatched):
+                result = await self.inner.call(name, arguments, **kwargs)
+            attempt["outcome"] = (
+                "error_result"
+                if isinstance(result, dict) and result.get("status") == "error"
+                else "result"
+            )
+            if isinstance(result, dict) and result.get("status") in {"ok", "ambiguous", "error"}:
+                attempt["result_status"] = result["status"]
+            return result
+        except BaseException as exc:
+            attempt["outcome"] = "error"
+            attempt["error_type"] = type(exc).__name__
+            raise
 
     async def read_resource(self, uri):
-        self.resources_read.append(uri)
-        return await self.inner.read_resource(uri)
+        attempt = {"uri": uri, "outcome": "pending"}
+        self.resource_attempts.append(attempt)
+        try:
+            result = await self.inner.read_resource(uri)
+            attempt["outcome"] = "result"
+            return result
+        except BaseException as exc:
+            attempt["outcome"] = "error"
+            attempt["error_type"] = type(exc).__name__
+            raise
 
 
 class ObservedRouter(SpecialistRouter):
@@ -86,6 +117,16 @@ class ObservedRouter(SpecialistRouter):
     async def decide(self, text, request_id, history=None):
         self.decision = await super().decide(text, request_id, history)
         return self.decision
+
+
+def case_error(failure, decision, mcp):
+    if failure:
+        return failure
+    if any(item["outcome"] in {"error", "error_result"} for item in mcp.tool_attempts):
+        return "tool_error"
+    if any(item["outcome"] == "error" for item in mcp.resource_attempts):
+        return "resource_error"
+    return None if decision else "router_unavailable"
 
 
 async def run(args):
@@ -113,8 +154,8 @@ async def run(args):
                 raise ValueError("Неизвестный идентификатор случая")
         for index, case in enumerate(cases, 1):
             pinned.responses.clear()
-            mcp.tools_called.clear()
-            mcp.resources_read.clear()
+            mcp.tool_attempts.clear()
+            mcp.resource_attempts.clear()
             router.decision = None
             started = time.monotonic()
             failure = None
@@ -138,8 +179,9 @@ async def run(args):
                     "expected_target": case["expected_target"],
                     "actual_target": decision.target if decision else None,
                     "confidence": decision.confidence if decision else None,
-                    "tools_called": list(mcp.tools_called),
-                    "resources_read": list(mcp.resources_read),
+                    "model_tool_proposals": pinned.tool_proposals,
+                    "tool_attempts": list(mcp.tool_attempts),
+                    "resource_attempts": list(mcp.resource_attempts),
                     "duration_ms": round((time.monotonic() - started) * 1000),
                     "model_metadata": [
                         {
@@ -150,11 +192,12 @@ async def run(args):
                         }
                         for x in pinned.responses
                     ],
-                    "error": failure or (None if decision else "router_unavailable"),
+                    "error": case_error(failure, decision, mcp),
                 }
             )
     output = {
         "kind": "lab3_routing",
+        "measurement_version": 2,
         "pinned_model": args.model,
         "pinned_endpoint": args.endpoint,
         "temperature": 0.0,

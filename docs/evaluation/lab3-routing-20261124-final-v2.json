@@ -1,0 +1,547 @@
+{
+  "kind": "lab3_routing",
+  "measurement_version": 2,
+  "pinned_model": "nvidia/nemotron-3.5-lightning:free",
+  "pinned_endpoint": "nvidia/nvfp4",
+  "temperature": 0.0,
+  "cases": [
+    {
+      "id": "schedule_1",
+      "query": "Какие пары у меня завтра?",
+      "expected_target": "schedule",
+      "actual_target": "schedule",
+      "confidence": 0.9,
+      "model_tool_proposals": [
+        "select_route",
+        "get_schedule"
+      ],
+      "tool_attempts": [
+        {
+          "name": "get_schedule",
+          "sdk_dispatch": true,
+          "outcome": "result",
+          "result_status": "ok"
+        }
+      ],
+      "resource_attempts": [],
+      "duration_ms": 5336,
+      "model_metadata": [
+        {
+          "model": "nvidia/nemotron-3.5-lightning:free",
+          "version": "nvidia/nemotron-3.5-lightning-20260807:free",
+          "endpoint": null,
+          "usage": {
+            "prompt_tokens": 515,
+            "completion_tokens": 175,
+            "total_tokens": 690
+          }
+        },
+        {
+          "model": "nvidia/nemotron-3.5-lightning:free",
+          "version": "nvidia/nemotron-3.5-lightning-20260807:free",
+          "endpoint": null,
+          "usage": {
+            "prompt_tokens": 1072,
+            "completion_tokens": 350,
+            "total_tokens": 1422
+          }
+        },
+        {
+          "model": "nvidia/nemotron-3.5-lightning:free",
+          "version": "nvidia/nemotron-3.5-lightning-20260807:free",
+          "endpoint": null,
+          "usage": {
+            "prompt_tokens": 887,
+            "completion_tokens": 274,
+            "total_tokens": 1161
+          }
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "schedule_2",
+      "query": "Напомни в пятницу в 17:00 отправить лабораторную.",
+      "expected_target": "schedule",
+      "actual_target": "schedule",
+      "confidence": 0.9,
+      "model_tool_proposals": [
+        "select_route",
+        "add_reminder"
+      ],
+      "tool_attempts": [],
+      "resource_attempts": [],
+      "duration_ms": 3339,
+      "model_metadata": [
+        {
+          "model": "nvidia/nemotron-3.5-lightning:free",
+          "version": "nvidia/nemotron-3.5-lightning-20260807:free",
+          "endpoint": null,
+          "usage": {
+            "prompt_tokens": 526,
+            "completion_tokens": 280,
+            "total_tokens": 806
+          }
+        },
+        {
+          "model": "nvidia/nemotron-3.5-lightning:free",
+          "version": "nvidia/nemotron-3.5-lightning-20260807:free",
+          "endpoint": null,
+          "usage": {
+            "prompt_tokens": 1083,
+            "completion_tokens": 330,
+            "total_tokens": 1413
+          }
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "schedule_3",
+      "query": "Когда сегодня начинается первая пара?",
+      "expected_target": "schedule",
+      "actual_target": "schedule",
+      "confidence": 0.95,
+      "model_tool_proposals": [
+        "select_route",
+        "get_schedule"
+      ],
+      "tool_attempts": [
+        {
+          "name": "get_schedule",
+          "sdk_dispatch": true,
+          "outcome": "result",
+          "result_status": "ok"
+        }
+      ],
+      "resource_attempts": [],
+      "duration_ms": 5415,
+      "model_metadata": [
+        {
+          "model": "nvidia/nemotron-3.5-lightning:free",
+          "version": "nvidia/nemotron-3.5-lightning-20260807:free",
+          "endpoint": null,
+          "usage": {
+            "prompt_tokens": 513,
+            "completion_tokens": 241,
+            "total_tokens": 754
+          }
+        },
+        {
+          "model": "nvidia/nemotron-3.5-lightning:free",
+          "version": "nvidia/nemotron-3.5-lightning-20260807:free",
+          "endpoint": null,
+          "usage": {
+            "prompt_tokens": 1070,
+            "completion_tokens": 253,
+            "total_tokens": 1323
+          }
+        },
+        {
+          "model": "nvidia/nemotron-3.5-lightning:free",
+          "version": "nvidia/nemotron-3.5-lightning-20260807:free",
+          "endpoint": null,
+          "usage": {
+            "prompt_tokens": 905,
+            "completion_tokens": 182,
+            "total_tokens": 1087
+          }
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "schedule_4",
+      "query": "Покажи расписание занятий на эту неделю.",
+      "expected_target": "schedule",
+      "actual_target": "schedule",
+      "confidence": 1.0,
+      "model_tool_proposals": [
+        "select_route"
+      ],
+      "tool_attempts": [],
+      "resource_attempts": [
+        {
+          "uri": "schedule://current-week",
+          "outcome": "result"
+        }
+      ],
+      "duration_ms": 1310,
+      "model_metadata": [
+        {
+          "model": "nvidia/nemotron-3.5-lightning:free",
+          "version": "nvidia/nemotron-3.5-lightning-20260807:free",
+          "endpoint": null,
+          "usage": {
+            "prompt_tokens": 519,
+            "completion_tokens": 210,
+            "total_tokens": 729
+          }
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "knowledge_1",
+      "query": "По учебным материалам объясни назначение MCP.",
+      "expected_target": "knowledge",
+      "actual_target": "knowledge",
+      "confidence": 0.95,
+      "model_tool_proposals": [
+        "select_route"
+      ],
+      "tool_attempts": [
+        {
+          "name": "search_materials",
+          "sdk_dispatch": true,
+          "outcome": "result",
+          "result_status": "ok"
+        }
+      ],
+      "resource_attempts": [
+        {
+          "uri": "materials://catalog",
+          "outcome": "result"
+        }
+      ],
+      "duration_ms": 1669,
+      "model_metadata": [
+        {
+          "model": "nvidia/nemotron-3.5-lightning:free",
+          "version": "nvidia/nemotron-3.5-lightning-20260807:free",
+          "endpoint": null,
+          "usage": {
+            "prompt_tokens": 518,
+            "completion_tokens": 283,
+            "total_tokens": 801
+          }
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "knowledge_2",
+      "query": "Найди в материалах определение контекстного окна.",
+      "expected_target": "knowledge",
+      "actual_target": "knowledge",
+      "confidence": 0.95,
+      "model_tool_proposals": [
+        "select_route"
+      ],
+      "tool_attempts": [
+        {
+          "name": "search_materials",
+          "sdk_dispatch": true,
+          "outcome": "result",
+          "result_status": "ok"
+        }
+      ],
+      "resource_attempts": [
+        {
+          "uri": "materials://catalog",
+          "outcome": "result"
+        }
+      ],
+      "duration_ms": 2095,
+      "model_metadata": [
+        {
+          "model": "nvidia/nemotron-3.5-lightning:free",
+          "version": "nvidia/nemotron-3.5-lightning-20260807:free",
+          "endpoint": null,
+          "usage": {
+            "prompt_tokens": 522,
+            "completion_tokens": 318,
+            "total_tokens": 840
+          }
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "knowledge_3",
+      "query": "Какие правила в конспекте относятся к структурированному выводу?",
+      "expected_target": "knowledge",
+      "actual_target": "knowledge",
+      "confidence": 0.9,
+      "model_tool_proposals": [
+        "select_route"
+      ],
+      "tool_attempts": [
+        {
+          "name": "search_materials",
+          "sdk_dispatch": true,
+          "outcome": "result",
+          "result_status": "ok"
+        }
+      ],
+      "resource_attempts": [
+        {
+          "uri": "materials://catalog",
+          "outcome": "result"
+        }
+      ],
+      "duration_ms": 2623,
+      "model_metadata": [
+        {
+          "model": "nvidia/nemotron-3.5-lightning:free",
+          "version": "nvidia/nemotron-3.5-lightning-20260807:free",
+          "endpoint": null,
+          "usage": {
+            "prompt_tokens": 524,
+            "completion_tokens": 330,
+            "total_tokens": 854
+          }
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "knowledge_4",
+      "query": "Составь краткое объяснение идемпотентности по учебным документам.",
+      "expected_target": "knowledge",
+      "actual_target": "knowledge",
+      "confidence": 0.9,
+      "model_tool_proposals": [
+        "select_route"
+      ],
+      "tool_attempts": [
+        {
+          "name": "search_materials",
+          "sdk_dispatch": true,
+          "outcome": "result",
+          "result_status": "ok"
+        }
+      ],
+      "resource_attempts": [
+        {
+          "uri": "materials://catalog",
+          "outcome": "result"
+        }
+      ],
+      "duration_ms": 2621,
+      "model_metadata": [
+        {
+          "model": "nvidia/nemotron-3.5-lightning:free",
+          "version": "nvidia/nemotron-3.5-lightning-20260807:free",
+          "endpoint": null,
+          "usage": {
+            "prompt_tokens": 526,
+            "completion_tokens": 417,
+            "total_tokens": 943
+          }
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "lifestyle_1",
+      "query": "Какая сейчас погода в моём городе?",
+      "expected_target": "lifestyle",
+      "actual_target": "lifestyle",
+      "confidence": 0.95,
+      "model_tool_proposals": [
+        "select_route"
+      ],
+      "tool_attempts": [
+        {
+          "name": "get_weather",
+          "sdk_dispatch": true,
+          "outcome": "result",
+          "result_status": "ok"
+        }
+      ],
+      "resource_attempts": [],
+      "duration_ms": 1763,
+      "model_metadata": [
+        {
+          "model": "nvidia/nemotron-3.5-lightning:free",
+          "version": "nvidia/nemotron-3.5-lightning-20260807:free",
+          "endpoint": null,
+          "usage": {
+            "prompt_tokens": 516,
+            "completion_tokens": 173,
+            "total_tokens": 689
+          }
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "lifestyle_2",
+      "query": "Стоит ли сегодня брать зонт?",
+      "expected_target": "lifestyle",
+      "actual_target": "lifestyle",
+      "confidence": 0.95,
+      "model_tool_proposals": [
+        "select_route"
+      ],
+      "tool_attempts": [
+        {
+          "name": "get_weather",
+          "sdk_dispatch": true,
+          "outcome": "result",
+          "result_status": "ok"
+        }
+      ],
+      "resource_attempts": [],
+      "duration_ms": 929,
+      "model_metadata": [
+        {
+          "model": "nvidia/nemotron-3.5-lightning:free",
+          "version": "nvidia/nemotron-3.5-lightning-20260807:free",
+          "endpoint": null,
+          "usage": {
+            "prompt_tokens": 517,
+            "completion_tokens": 156,
+            "total_tokens": 673
+          }
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "lifestyle_3",
+      "query": "Сильный ли сейчас ветер?",
+      "expected_target": "lifestyle",
+      "actual_target": "lifestyle",
+      "confidence": 0.95,
+      "model_tool_proposals": [
+        "select_route"
+      ],
+      "tool_attempts": [
+        {
+          "name": "get_weather",
+          "sdk_dispatch": true,
+          "outcome": "result",
+          "result_status": "ok"
+        }
+      ],
+      "resource_attempts": [],
+      "duration_ms": 1576,
+      "model_metadata": [
+        {
+          "model": "nvidia/nemotron-3.5-lightning:free",
+          "version": "nvidia/nemotron-3.5-lightning-20260807:free",
+          "endpoint": null,
+          "usage": {
+            "prompt_tokens": 513,
+            "completion_tokens": 199,
+            "total_tokens": 712
+          }
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "lifestyle_4",
+      "query": "Как одеться с учётом текущей погоды?",
+      "expected_target": "lifestyle",
+      "actual_target": "lifestyle",
+      "confidence": 0.9,
+      "model_tool_proposals": [
+        "select_route"
+      ],
+      "tool_attempts": [
+        {
+          "name": "get_weather",
+          "sdk_dispatch": true,
+          "outcome": "result",
+          "result_status": "ok"
+        }
+      ],
+      "resource_attempts": [],
+      "duration_ms": 1158,
+      "model_metadata": [
+        {
+          "model": "nvidia/nemotron-3.5-lightning:free",
+          "version": "nvidia/nemotron-3.5-lightning-20260807:free",
+          "endpoint": null,
+          "usage": {
+            "prompt_tokens": 519,
+            "completion_tokens": 179,
+            "total_tokens": 698
+          }
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "clarify_1",
+      "query": "Подготовь меня к завтрашнему дню.",
+      "expected_target": "clarify",
+      "actual_target": "clarify",
+      "confidence": 0.9,
+      "model_tool_proposals": [
+        "select_route"
+      ],
+      "tool_attempts": [],
+      "resource_attempts": [],
+      "duration_ms": 1589,
+      "model_metadata": [
+        {
+          "model": "nvidia/nemotron-3.5-lightning:free",
+          "version": "nvidia/nemotron-3.5-lightning-20260807:free",
+          "endpoint": null,
+          "usage": {
+            "prompt_tokens": 518,
+            "completion_tokens": 284,
+            "total_tokens": 802
+          }
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "clarify_2",
+      "query": "Сделай что-нибудь полезное.",
+      "expected_target": "clarify",
+      "actual_target": "clarify",
+      "confidence": 0.95,
+      "model_tool_proposals": [
+        "select_route"
+      ],
+      "tool_attempts": [],
+      "resource_attempts": [],
+      "duration_ms": 1178,
+      "model_metadata": [
+        {
+          "model": "nvidia/nemotron-3.5-lightning:free",
+          "version": "nvidia/nemotron-3.5-lightning-20260807:free",
+          "endpoint": null,
+          "usage": {
+            "prompt_tokens": 515,
+            "completion_tokens": 241,
+            "total_tokens": 756
+          }
+        }
+      ],
+      "error": null
+    },
+    {
+      "id": "clarify_3",
+      "query": "Расскажи, что для меня важно сегодня.",
+      "expected_target": "clarify",
+      "actual_target": "clarify",
+      "confidence": 0.95,
+      "model_tool_proposals": [
+        "select_route"
+      ],
+      "tool_attempts": [],
+      "resource_attempts": [],
+      "duration_ms": 1224,
+      "model_metadata": [
+        {
+          "model": "nvidia/nemotron-3.5-lightning:free",
+          "version": "nvidia/nemotron-3.5-lightning-20260807:free",
+          "endpoint": null,
+          "usage": {
+            "prompt_tokens": 518,
+            "completion_tokens": 237,
+            "total_tokens": 755
+          }
+        }
+      ],
+      "error": null
+    }
+  ]
+}

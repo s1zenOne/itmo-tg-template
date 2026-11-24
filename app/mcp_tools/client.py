@@ -40,7 +40,14 @@ _dispatch_observer: ContextVar[Callable[[str], None] | None] = ContextVar(
 @contextmanager
 def observe_tool_dispatch(observer: Callable[[str], None]) -> Iterator[None]:
     """Observe calls handed to the MCP SDK in the current asynchronous task."""
-    token = _dispatch_observer.set(observer)
+    previous = _dispatch_observer.get()
+
+    def notify(name: str) -> None:
+        if previous is not None:
+            previous(name)
+        observer(name)
+
+    token = _dispatch_observer.set(notify)
     try:
         yield
     finally:
