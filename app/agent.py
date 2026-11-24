@@ -59,7 +59,7 @@ logger = logging.getLogger("app.agent")
 def _safe_error_code(error: BaseException) -> str:
     if isinstance(error, MCPUnavailable):
         return "unavailable"
-    if isinstance(error, ToolError):
+    if isinstance(error, (ReminderError, ToolError)):
         if error.code in ERRORS:
             return error.code
         if error.code.endswith("_timeout"):
@@ -643,9 +643,11 @@ class AgentService:
             )
 
     async def _current_week(self, now: datetime, trace_id: UUID | None) -> _Outcome:
+        started = self.clock()
+        reading = False
         try:
             require_resource("schedule", WEEK_URI, self.mcp.resources)
-            started = self.clock()
+            reading = True
             data = WeekSchedule.model_validate(await self.mcp.read_resource(WEEK_URI))
             if data.timezone != self.settings.schedule_timezone:
                 raise ValueError("unexpected schedule zone")
@@ -666,7 +668,17 @@ class AgentService:
                 execution="успешно",
                 facts=ScheduleFacts(dates=dates),
             )
-        except (MCPUnavailable, ToolError, KeyError, TypeError, ValueError):
+        except (MCPUnavailable, ToolError, KeyError, TypeError, ValueError) as exc:
+            if trace_id is not None:
+                await self.traces.span(
+                    trace_id,
+                    "schedule",
+                    "resource" if reading else "execute",
+                    started,
+                    self.clock(),
+                    "error",
+                    error_code=_safe_error_code(exc),
+                )
             return _Outcome(
                 AgentReply("Расписание на текущую неделю сейчас недоступно."),
                 "отказ",
@@ -682,9 +694,17 @@ class AgentService:
 
         call_started = self.clock()
         dispatched: list[str] = []
+        resource_phase = True
+        reading_resource = False
         try:
             require_resource("knowledge", CATALOG_URI, self.mcp.resources)
+            reading_resource = True
             catalog = await self.mcp.read_resource(CATALOG_URI)
+            if trace_id is not None:
+                await self.traces.span(
+                    trace_id, "knowledge", "resource", call_started, self.clock(), "ok"
+                )
+            resource_phase = False
             require_tool("knowledge", MATERIALS, self.mcp.tools)
             call_started = self.clock()
             data = validate_result(
@@ -736,7 +756,18 @@ class AgentService:
                 facts=result.facts,
             )
         except (MCPUnavailable, ToolError, KeyError, TypeError, ValueError) as exc:
-            await self._tool_error_span(trace_id, "knowledge", call_started, dispatched, exc)
+            if trace_id is not None and resource_phase:
+                await self.traces.span(
+                    trace_id,
+                    "knowledge",
+                    "resource" if reading_resource else "execute",
+                    call_started,
+                    self.clock(),
+                    "error",
+                    error_code=_safe_error_code(exc),
+                )
+            else:
+                await self._tool_error_span(trace_id, "knowledge", call_started, dispatched, exc)
             return _Outcome(
                 AgentReply("Учебные материалы сейчас недоступны."),
                 "отказ",
@@ -997,17 +1028,31 @@ class AgentService:
     async def confirm(self, owner_id: int, action_id: UUID, *, accepted: bool) -> AgentReply:
         now, started = self.clock(), time.monotonic()
         request_id = secrets.token_hex(8)
+        trace_id = (
+            await self.traces.start(owner_id, request_id, "schedule")
+            if self.traces is not None
+            else None
+        )
+        dispatched: list[str] = []
+        call_started = now
+        error: BaseException | None = None
         try:
             if accepted:
                 action = await self.store.confirm_reminder(owner_id, action_id)
                 arguments = {"text": action.text, "remind_at": action.remind_at.isoformat()}
                 if self.specialist_router is not None:
                     require_tool("schedule", REMINDER, self.mcp.tools)
+                call_started = self.clock()
+                with observe_tool_dispatch(dispatched.append):
+                    raw_result = await self.mcp.call(
+                        REMINDER, arguments, owner_id=owner_id, action_id=action_id
+                    )
+                # A returned test-double result also proves that its call took place.
+                if not dispatched:
+                    dispatched.append(REMINDER)
                 result = validate_result(
                     REMINDER,
-                    await self.mcp.call(
-                        REMINDER, arguments, owner_id=owner_id, action_id=action_id
-                    ),
+                    raw_result,
                 )
                 if (
                     datetime.fromisoformat(result["remind_at"]) != action.remind_at
@@ -1036,7 +1081,8 @@ class AgentService:
                     REMINDER,
                     execution="отменено",
                 )
-        except MCPUnavailable:
+        except MCPUnavailable as exc:
+            error = exc
             outcome = _Outcome(
                 AgentReply(f"{UNAVAILABLE_MESSAGE} Затем нажмите кнопку подтверждения повторно."),
                 "подтверждение",
@@ -1045,6 +1091,7 @@ class AgentService:
                 execution="сбой",
             )
         except (ReminderError, ToolError) as exc:
+            error = exc
             terminal = exc.code in {"expired", "cancelled", "past", "executed"}
             text = CONFIRMATION_FAILURES.get(
                 exc.code, "Не удалось проверить запись. Попробуйте подтвердить ещё раз."
@@ -1057,6 +1104,28 @@ class AgentService:
                 validation="отклонена",
                 execution="остановлено",
             )
+        if trace_id is not None:
+            if dispatched:
+                await self.traces.span(
+                    trace_id,
+                    "schedule",
+                    "tool",
+                    call_started,
+                    self.clock(),
+                    "error" if error else "ok",
+                    tool_name=REMINDER,
+                    error_code=_safe_error_code(error) if error else None,
+                )
+            await self.traces.span(
+                trace_id,
+                "schedule",
+                "confirm",
+                now,
+                self.clock(),
+                "error" if error else "ok",
+                error_code=_safe_error_code(error) if error else None,
+            )
+            await self.traces.close(trace_id, "error" if error else "ok")
         return await self._record(owner_id, request_id, started, now, outcome)
 
     async def trace(self, owner_id: int, argument: str) -> str:
