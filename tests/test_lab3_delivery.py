@@ -399,12 +399,15 @@ async def test_actual_send_is_traced_with_safe_metadata(
     await DeliveryService(FakePool(connection), bot, clock=Clock())._deliver_one(NOW)
     assert len(bot.calls) == 1
     span = recorded[0]
-    assert span[1][:3] == (trace_id, "telegram", "send")
-    assert span[1][5] == expected_status
-    assert span[2]["error_code"] == expected_code
+    # Check every field instead of searching a UUID's arbitrary string representation.
+    assert span == (
+        "span",
+        (trace_id, "telegram", "send", NOW, NOW, expected_status),
+        {"error_code": expected_code},
+    )
     assert (len(recorded) == 2) == terminal
-    assert "sensitive" not in repr(recorded)
-    assert "200" not in repr(recorded)
+    if terminal:
+        assert recorded[1] == ("close", (trace_id, expected_status, NOW))
 
 
 async def test_preparation_registers_trace_against_event(monkeypatch):
